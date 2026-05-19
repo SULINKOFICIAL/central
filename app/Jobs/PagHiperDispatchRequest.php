@@ -57,16 +57,16 @@ class PagHiperDispatchRequest extends InicializerJob
     protected function process(): mixed
     {
         return match ($this->pagHiperDTO->type) {
-            'pix'    => $this->pix($this->pagHiperDTO),
-            'boleto' => $this->boleto($this->pagHiperDTO),
-            default           => null,
+            'pix',
+            'boleto' => $this->payments($this->pagHiperDTO),
+            default  => null,
         };
     }
 
     /**
      * Processa eventos de pagamento resolvendo o contexto completo antes de persistir.
      */
-    private function pix(PagHiperDTO $pagHiperDTO): void
+    private function payments(PagHiperDTO $pagHiperDTO): void
     {
         // Resolve o tenant a partir da transação externa recebida no evento
         $tenant = $this->tenantService->findTenantByTransaction('paghiper', $pagHiperDTO->transactionId);
@@ -74,15 +74,10 @@ class PagHiperDispatchRequest extends InicializerJob
         // Verifica se já existe um plano ativo cadastrado
         $plan = $this->activePlanService->findActivePlan($tenant->id);
 
-        // Monta e persiste o pagamento
-        $this->pagHiperPayloadService->create($pagHiperDTO, $tenant, $plan, $this->data);
-    }
+        // Busca ou cria assinatura apenas quando o PIX foi efetivamente pago
+        $subscription = $pagHiperDTO->status === 'paid' ? $this->subscriptionService->findOrCreateForPagHiper($tenant->id, $plan->id, $pagHiperDTO->transactionId, $pagHiperDTO->type) : null;
 
-    /**
-     * Processa eventos de pagamento resolvendo o contexto completo antes de persistir.
-     */
-    private function boleto(PagHiperDTO $pagHiperDTO): void
-    {
-        return;
+        // Monta e persiste o pagamento
+        $this->pagHiperPayloadService->create($pagHiperDTO, $tenant, $subscription, $plan, $this->data);
     }
 }

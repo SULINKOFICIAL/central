@@ -34,6 +34,21 @@ class ApisPaymentsController extends Controller
             return response()->json($response, 200);
         }
 
+        // Se for do tipo boleto
+        if (($data['payment_type'] ?? null) === 'boleto') {
+            $response = $paymentPlanService->processPlanBoletoPayment(
+                $data['tenant'],
+                $data['billing_cycle'],
+                $data['client_info'],
+            );
+
+            if (!$response['success']) {
+                return response()->json(['message' => $response['message']], 422);
+            }
+
+            return response()->json($response, 200);
+        }
+
         // Obtem o pacote do cliente
         $plan = $service->getPlanInProgress($data['tenant']);
 
@@ -69,17 +84,32 @@ class ApisPaymentsController extends Controller
     }
 
     /**
-     * Consulta status canônico da transação PIX do pedido de assinatura.
+     * Consulta status canônico da transação do pedido de assinatura.
+     * Roteia para o método correto de acordo com o provider_method da transação.
      */
     public function paymentStatus(Request $request, PaymentPlanService $paymentPlanService)
     {
         // Obtém dados
         $data = $request->all();
 
-        // Consulta status PIX junto ao service de pagamentos.
-        $response = $paymentPlanService->getPixStatus($data['tenant'], $data['transaction_id']);
+        // Busca o provider_method da transação para rotear corretamente
+        $transaction = \App\Models\OrderTransaction::where('provider_transaction_id', $data['transaction_id'])
+            ->where('provider', 'paghiper')
+            ->first();
 
-        // Interrompe fluxo quando não achar PIX válido.
+        // Retorna erro quando a transação não existir
+        if (!$transaction) {
+            return response()->json(['success' => false, 'message' => 'Transação não encontrada.'], 404);
+        }
+
+        // Roteia para o status de boleto quando o método for boleto
+        if ($transaction->provider_method === 'boleto') {
+            $response = $paymentPlanService->getBoletoStatus($data['tenant'], $data['transaction_id']);
+        } else {
+            $response = $paymentPlanService->getPixStatus($data['tenant'], $data['transaction_id']);
+        }
+
+        // Interrompe fluxo quando não encontrar a transação
         if (!$response['success']) {
             return response()->json($response, 404);
         }

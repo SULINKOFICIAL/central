@@ -23,16 +23,12 @@ class PagHiperResponseService
     {
 
         /**
-         *
          * Para notificações recebidas pela PagHiper PIX, tem url pré definida.
-         *
          */
         $type = $data['source_api'] == 'https://pix.paghiper.com' ? 'pix' : 'boleto';
 
         /**
-         *
          * Consulta a notificação completa na API da PagHiper.
-         *
          */
         $notification = $this->pagHiperService->notification($data['source_api'], $data['transaction_id'], $data['notification_id']);
 

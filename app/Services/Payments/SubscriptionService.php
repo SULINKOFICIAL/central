@@ -74,6 +74,33 @@ class SubscriptionService
     }
 
     /**
+     * Busca assinatura PagHiper existente do tenant ou cria uma nova para o primeiro ciclo pago.
+     */
+    public function findOrCreateForPagHiper(int $tenantId, int $planId, string $transactionId, string $paymentMethod): Subscription
+    {
+        $subscription = Subscription::where('tenant_id', $tenantId)
+            ->where('provider', 'paghiper')
+            ->latest('id')
+            ->first();
+
+        if ($subscription) {
+            return $subscription;
+        }
+
+        return Subscription::create([
+            'tenant_id'                => $tenantId,
+            'plan_id'                  => $planId,
+            'provider'                 => 'paghiper',
+            'provider_subscription_id' => $transactionId,
+            'interval'                 => 'monthly',
+            'payment_method'           => $paymentMethod,
+            'currency'                 => 'BRL',
+            'installments'             => 1,
+            'status'                   => 'active',
+        ]);
+    }
+
+    /**
      *
      * Atualiza os dados principais da assinatura para manter o cadastro alinhado ao status atual.
      *

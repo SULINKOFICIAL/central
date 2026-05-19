@@ -16,9 +16,9 @@ class PagHiperPixProviderService
 
     public function __construct()
     {
-        $this->apiKey = env('PAG_HIPER_API_KEY');
-        $this->createUrl = env('PAG_HIPER_PIX_CREATE_URL', 'https://pix.paghiper.com/invoice/create/');
-        $this->webhookUrl = env('PAG_HIPER_WEBHOOK_URL');
+        $this->apiKey     = env('PAG_HIPER_API_KEY', '');
+        $this->createUrl  = env('PAG_HIPER_PIX_CREATE_URL', 'https://pix.paghiper.com/invoice/create/');
+        $this->webhookUrl = env('PAG_HIPER_WEBHOOK_URL', '');
     }
 
     /**
@@ -53,7 +53,7 @@ class PagHiperPixProviderService
             ->post($this->createUrl, $payload);
 
         // Obtem o json de resposta
-        $responseData = $response->json();
+        $responseData = $response->json() ?? [];
 
         // Obtem a chave onde a PagHiper encapsula os dados úteis
         $resultNode = $responseData['pix_create_request'] ?? [];
