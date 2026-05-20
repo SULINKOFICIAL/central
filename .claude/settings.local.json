@@ -8,7 +8,8 @@
       "Glob",
       "Grep",
       "WebSearch",
-      "WebFetch"
+      "WebFetch",
+      "PowerShell($latestLog = \"$env:APPDATA\\\\Cursor\\\\logs\\\\20260519T165048\"; Write-Output \"=== Conteúdo do log mais recente ===\"; Get-ChildItem $latestLog -Recurse -File -ErrorAction SilentlyContinue | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 300)"
     ]
   }
 }
