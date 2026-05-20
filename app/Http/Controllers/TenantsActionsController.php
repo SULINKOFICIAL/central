@@ -1077,6 +1077,8 @@ class TenantsActionsController extends Controller
             'update_s3_metrics',
             'archive_finished_tasks',
             'refresh_mercado_livre',
+            'emails:process-actions',
+            'email-inbox:import',
             'notify_commitments_10m',
             'import_cfop_table',
             'import_ncm_table',

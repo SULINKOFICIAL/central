@@ -27,6 +27,16 @@ Schedule::job(new ScheduleDispatcher('refresh_mercado_livre'))
         ->cron('0 3,9,15,21 * * *')
         ->onOneServer();
 
+Schedule::job(new ScheduleDispatcher('emails:process-actions'))
+        ->everyMinute()
+        ->withoutOverlapping()
+        ->onOneServer();
+
+Schedule::job(new ScheduleDispatcher('email-inbox:import'))
+        ->everyFiveMinutes()
+        ->withoutOverlapping()
+        ->onOneServer();
+
 // Lembretes de compromissos para começar em 10 minutos.
 Schedule::job(new ScheduleDispatcher('notify_commitments_10m', [
             'minutes_before' => 10,
