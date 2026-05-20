@@ -7,6 +7,7 @@ use App\Jobs\PagHiperDispatchRequest;
 use App\Models\LogsApi;
 use App\Support\JobDispatcher;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class PagHiperController extends Controller
 {
@@ -41,6 +42,8 @@ class PagHiperController extends Controller
             'json'   => json_encode($data),
             'status' => LogApiStatusEnum::RECEIVED,
         ]);
+
+        Log::info('PagHiper webhook recebido', $data);
 
         // Se for um LogApi que está sendo reprocessado
         if ($logOld) {
