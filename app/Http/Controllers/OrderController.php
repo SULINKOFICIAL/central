@@ -7,6 +7,7 @@ use App\Models\TenantPlan;
 use App\Models\TenantPlanItem;
 use App\Models\TenantPlanItemConfiguration;
 use App\Services\OrderService;
+use App\Services\Payments\SubscriptionPaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -56,14 +57,14 @@ class OrderController extends Controller
 
     }
 
-    public function reprocessSubscription($id)
+    public function reprocessSubscription($id, SubscriptionPaymentService $subscriptionPaymentService)
     {
 
         // Busca o pedido
         $order = Order::find($id);
 
         // Inicia serviço de reprocessamento
-        $this->orderService->processSubscriptionPayment($order, $order->subscription, $order->plan);
+        $subscriptionPaymentService->processSubscriptionPayment($order, $order->subscription, $order->plan);
 
         // Redireciona
         return redirect()
