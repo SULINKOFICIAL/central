@@ -29,7 +29,7 @@ Schedule::job(new ScheduleDispatcher('emails:process-actions'))
         ->onOneServer();
 
 Schedule::job(new ScheduleDispatcher('email-inbox:import'))
-        ->everyFiveMinutes()
+        ->everyThirtyMinutes()
         ->withoutOverlapping()
         ->onOneServer();
 
