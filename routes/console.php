@@ -23,10 +23,6 @@ Schedule::job(new ScheduleDispatcher('archive_finished_tasks'))
         ->dailyAt('00:10')
         ->onOneServer();
         
-Schedule::job(new ScheduleDispatcher('refresh_mercado_livre'))
-        ->cron('0 3,9,15,21 * * *')
-        ->onOneServer();
-
 Schedule::job(new ScheduleDispatcher('emails:process-actions'))
         ->everyMinute()
         ->withoutOverlapping()
