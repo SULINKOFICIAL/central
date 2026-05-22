@@ -367,6 +367,7 @@ if (! function_exists('header_menu_items')) {
                     'systems.run.scheduled.now',
                     'systems.run.scheduled.now.tenant',
                     'systems.update.all.systems',
+                    'system.settings.central.queues',
                 ],
                 'children' => [
                     [
@@ -400,6 +401,12 @@ if (! function_exists('header_menu_items')) {
                         'active_routes' => ['systems.run.scheduled.now', 'systems.run.scheduled.now.tenant'],
                         'confirm_message' => 'Deseja mesmo disparar as tarefas para os clientes ativos?',
                         'icon' => ['class' => 'fa-solid fa-clock-rotate-left fs-5'],
+                    ],
+                    [
+                        'label' => 'Filas da Central',
+                        'route' => 'system.settings.central.queues',
+                        'active_routes' => ['system.settings.central.queues'],
+                        'icon' => ['class' => 'fa-solid fa-list-check fs-5'],
                     ],
                 ],
             ],

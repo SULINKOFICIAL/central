@@ -112,6 +112,12 @@ Route::middleware(['auth'])->group(function () {
         });
 
         /**
+         * Rotas para consultar e reiniciar as filas da própria Central.
+         */
+        Route::get('/sistema/filas-central', [SystemSettingsController::class, 'centralQueues'])->name('central.queues');
+        Route::post('/sistema/filas-central/reiniciar', [SystemSettingsController::class, 'restartCentralQueues'])->name('central.queues.restart');
+
+        /**
          * Rota para atualizar a própria central core_business.
          */
         Route::get('/sistema/central/atualizar', [SystemSettingsController::class, 'updateCoreBusiness'])->name('core.update');

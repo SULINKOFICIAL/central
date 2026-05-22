@@ -8,6 +8,11 @@ use Throwable;
 
 class CoreBusinessUpdateService
 {
+    public function __construct(
+        private readonly CentralSupervisorService $centralSupervisorService
+    ) {
+    }
+
     /**
      * Executa a rotina de atualização da central core_business.
      */
@@ -71,16 +76,7 @@ class CoreBusinessUpdateService
             ],
             [
                 'label' => 'Reiniciar filas',
-                'command' => [
-                    'sudo',
-                    '-u',
-                    'deploy',
-                    '/bin/supervisorctl',
-                    '-c',
-                    '/etc/supervisord.conf',
-                    'restart',
-                    'central-worker:*',
-                ],
+                'command' => $this->centralSupervisorService->restartCommand(),
                 'timeout' => 120,
             ],
         ];

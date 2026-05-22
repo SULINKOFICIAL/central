@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\SimpleEmailMailable;
 use App\Models\Tenant;
 use App\Services\CpanelDomainLookupService;
+use App\Services\CentralSupervisorService;
 use App\Services\CoreBusinessUpdateService;
 use App\Services\EmailService;
 use App\Services\MailSettingsService;
@@ -32,6 +33,7 @@ class SystemSettingsController extends Controller
         private readonly ProvisioningIntegrityService $provisioningIntegrityService,
         private readonly CpanelDomainLookupService $cpanelDomainLookupService,
         private readonly CoreBusinessUpdateService $coreBusinessUpdateService,
+        private readonly CentralSupervisorService $centralSupervisorService,
     ) {
     }
 
@@ -97,6 +99,34 @@ class SystemSettingsController extends Controller
             'domain' => $domain,
             'lookup' => $lookup,
         ]);
+    }
+
+    /**
+     * Exibe o status atual das filas da Central no Supervisor.
+     */
+    public function centralQueues(): View
+    {
+        return view('pages.system.central-queues', [
+            'supervisorStatus' => $this->centralSupervisorService->status(),
+        ]);
+    }
+
+    /**
+     * Reinicia as filas da Central e retorna para a tela de consulta.
+     */
+    public function restartCentralQueues(): RedirectResponse
+    {
+        $result = $this->centralSupervisorService->restart();
+
+        if (!($result['success'] ?? false)) {
+            return redirect()
+                ->route('system.settings.central.queues')
+                ->with('error', 'Falha ao reiniciar filas da Central: ' . ($result['error'] ?: $result['output'] ?: 'erro desconhecido'));
+        }
+
+        return redirect()
+            ->route('system.settings.central.queues')
+            ->with('message', 'Filas da Central reiniciadas com sucesso.');
     }
 
     /**
