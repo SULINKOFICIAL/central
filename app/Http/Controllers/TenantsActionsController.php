@@ -10,7 +10,7 @@ use App\Models\Resource;
 use App\Models\ScheduledTaskDispatch;
 use App\Models\ScheduledTaskDispatchItem;
 use App\Services\GuzzleService;
-use App\Services\TenantConfigurationSyncService;
+use App\Services\TenantUpdateNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -29,7 +29,7 @@ class TenantsActionsController extends Controller
         Request $request,
         Tenant $content,
         GuzzleService $guzzleService,
-        private TenantConfigurationSyncService $syncService
+        private TenantUpdateNotificationService $tenantUpdateNotificationService
     )
     {
         $this->request = $request;
@@ -270,6 +270,73 @@ class TenantsActionsController extends Controller
             ->implode(', ');
     }
 
+    /**
+     * Adiciona uma falha ao resumo somente quando a ação retornou erro.
+     * O runtime status é recarregado para pegar a mensagem persistida pela ação.
+     */
+    private function collectUpdateFailure(
+        array &$failures,
+        Tenant $tenant,
+        string $action,
+        bool $success,
+        array $extra = []
+    ): void {
+        /**
+         * Ações concluídas com sucesso não entram no e-mail de alerta.
+         */
+        if ($success) {
+            return;
+        }
+
+        /**
+         * Usa o erro salvo no banco para manter o alerta igual ao status da tela.
+         */
+        $runtimeStatus = $this->runtimeStatusFor($tenant)->refresh();
+        $failures[] = array_merge(
+            $this->buildUpdateFailure($tenant, $runtimeStatus, $action),
+            $extra
+        );
+    }
+
+    /**
+     * Normaliza os dados que serão usados no corpo do e-mail de alerta.
+     * O domínio principal ajuda a identificar rapidamente qual instalação falhou.
+     */
+    private function buildUpdateFailure(Tenant $tenant, TenantRuntimeStatus $runtimeStatus, string $action): array
+    {
+        /**
+         * Evita consulta repetida quando o domínio já foi carregado no lote.
+         */
+        $tenant->loadMissing('domains');
+        $primaryDomain = $tenant->domains->first();
+        $errorColumn = $this->updateFailureErrorColumn($action);
+
+        return [
+            'tenant_id' => $tenant->id,
+            'tenant_name' => $tenant->name,
+            'installation_type' => $tenant->type_installation,
+            'domain' => $primaryDomain?->domain ?? '-',
+            'action' => $action,
+            'error' => $runtimeStatus->{$errorColumn} ?: 'Erro desconhecido',
+        ];
+    }
+
+    /**
+     * Resolve qual coluna guarda a mensagem de erro de cada ação técnica.
+     * O alerta usa essas mesmas colunas que alimentam a listagem dos tenants.
+     */
+    private function updateFailureErrorColumn(string $action): string
+    {
+        $columns = [
+            'database' => 'db_error',
+            'git' => 'git_error',
+            'supervisor' => 'sp_error',
+            'npm_build' => 'js_error',
+        ];
+
+        return $columns[$action] ?? 'git_error';
+    }
+
     private function processAllSystemsUpdate(array $selectedActions, string $updateScope, $selectedTenantId = null): void
     {
         /**
@@ -279,6 +346,12 @@ class TenantsActionsController extends Controller
         $shouldUpdateDatabase = in_array('database', $selectedActions, true);
         $shouldRestartSupervisor = in_array('supervisor', $selectedActions, true);
         $shouldBuildJavascript = in_array('npm_build', $selectedActions, true);
+
+        /**
+         * Guarda as falhas encontradas durante toda a execução para enviar
+         * um único resumo no final, em vez de disparar um e-mail por tenant.
+         */
+        $updateFailures = [];
 
         /**
          * Obtém todos os clientes
@@ -304,6 +377,11 @@ class TenantsActionsController extends Controller
         if ($clients->isEmpty()) {
             return;
         }
+
+        /**
+         * Carrega os domínios uma vez para o resumo não gerar consultas extras.
+         */
+        $clients->load('domains');
         
         /**
          * Sinaliza como desatualizado somente os eixos solicitados para a UI
@@ -351,15 +429,30 @@ class TenantsActionsController extends Controller
          */
         foreach ($clientsDedicateds as $tenant) {
             if ($shouldUpdateGit) {
-                $this->updateGit($tenant->id);
+                $updated = $this->updateGit($tenant->id);
+
+                /**
+                 * Se o Git falhar, registra o erro retornado pela API do tenant.
+                 */
+                $this->collectUpdateFailure($updateFailures, $tenant, 'git', $updated);
             }
 
             if ($shouldRestartSupervisor) {
-                $this->restartSupervisor($tenant->id);
+                $updated = $this->restartSupervisor($tenant->id);
+
+                /**
+                 * Se o supervisor falhar, registra o erro salvo em sp_error.
+                 */
+                $this->collectUpdateFailure($updateFailures, $tenant, 'supervisor', $updated);
             }
 
             if ($shouldBuildJavascript) {
-                $this->runNpmBuild($tenant->id);
+                $updated = $this->runNpmBuild($tenant->id);
+
+                /**
+                 * Se o build falhar, registra o erro salvo em js_error.
+                 */
+                $this->collectUpdateFailure($updateFailures, $tenant, 'npm_build', $updated);
             }
         }
 
@@ -375,11 +468,24 @@ class TenantsActionsController extends Controller
          * final para os demais compartilhados, mantendo consistência visual.
          */
         if ($sharedTenant) {
+            /**
+             * Usado apenas no resumo para indicar quantos tenants receberam
+             * o status replicado da ação executada no tenant compartilhado base.
+             */
+            $sharedTenantsCount = $clients->where('type_installation', 'shared')->count();
+
             if ($shouldUpdateGit) {
                 /**
                  * Verifica se o cliente compartilhado foi atualizado com sucesso.
                  */
-                $this->updateGit($sharedTenant->id);
+                $updated = $this->updateGit($sharedTenant->id);
+
+                /**
+                 * No shared, a falha é reportada uma vez no tenant base.
+                 */
+                $this->collectUpdateFailure($updateFailures, $sharedTenant, 'git', $updated, [
+                    'shared_replicated_count' => $sharedTenantsCount,
+                ]);
 
                 /**
                  * Atualiza o git de todas as hospedagens compartilhadas.
@@ -397,7 +503,14 @@ class TenantsActionsController extends Controller
                 /**
                  * Verifica se o restart de filas no cliente compartilhado foi concluído.
                  */
-                $this->restartSupervisor($sharedTenant->id);
+                $updated = $this->restartSupervisor($sharedTenant->id);
+
+                /**
+                 * No shared, a falha é reportada uma vez no tenant base.
+                 */
+                $this->collectUpdateFailure($updateFailures, $sharedTenant, 'supervisor', $updated, [
+                    'shared_replicated_count' => $sharedTenantsCount,
+                ]);
 
                 /**
                  * Atualiza o status do supervisor em todas as hospedagens compartilhadas.
@@ -412,7 +525,14 @@ class TenantsActionsController extends Controller
             }
 
             if ($shouldBuildJavascript) {
-                $this->runNpmBuild($sharedTenant->id);
+                $updated = $this->runNpmBuild($sharedTenant->id);
+
+                /**
+                 * No shared, a falha é reportada uma vez no tenant base.
+                 */
+                $this->collectUpdateFailure($updateFailures, $sharedTenant, 'npm_build', $updated, [
+                    'shared_replicated_count' => $sharedTenantsCount,
+                ]);
 
                 /**
                  * O build em ambiente compartilhado roda uma vez e o resultado
@@ -437,9 +557,25 @@ class TenantsActionsController extends Controller
              * Loop para percorrer todos os clientes quando banco foi selecionado.
              */
             foreach ($clients as $tenant) {
-                $this->updateDatabase($tenant->id);
+                $updated = $this->updateDatabase($tenant->id);
+
+                /**
+                 * Banco é individual mesmo em hospedagem compartilhada.
+                 */
+                $this->collectUpdateFailure($updateFailures, $tenant, 'database', $updated);
             }
         }
+
+        /**
+         * Envia o alerta depois de todas as ações e replicações.
+         * Sem falhas ou sem destinatários, o serviço apenas encerra/loga.
+         */
+        $this->tenantUpdateNotificationService->notifyFailures([
+            'scope' => $updateScope,
+            'actions' => $selectedActions,
+            'total_tenants' => $clients->count(),
+            'selected_tenant_id' => $selectedTenantId,
+        ], $updateFailures);
     }
 
     /**
