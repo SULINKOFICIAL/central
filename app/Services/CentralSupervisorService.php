@@ -67,6 +67,7 @@ class CentralSupervisorService
     {
         return array_merge([
             'sudo',
+            '-n',
             '-u',
             self::SUPERVISOR_USER,
             self::SUPERVISOR_BINARY,
