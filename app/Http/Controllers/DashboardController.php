@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Tenant;
 use App\Models\CouponRedemption;
+use App\Models\EmailDispatchLog;
 use App\Models\Order;
+use App\Services\MailSettingsService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,6 +14,11 @@ use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
+    public function __construct(
+        private readonly MailSettingsService $mailSettingsService
+    ) {
+    }
+
     /**
      * Monta os dados da dashboard e retorna a view principal.
      * Calcula métricas mensais, totais atuais e a lista dos últimos MiCores.
@@ -72,6 +79,14 @@ class DashboardController extends Controller
             ->limit(6)
             ->get();
 
+        // Carrega falhas recentes de disparo para destacar na home operacional.
+        $emailDispatchErrors = EmailDispatchLog::query()
+            ->where('status', 'error')
+            ->where('created_at', '>=', now()->subDay())
+            ->orderByDesc('created_at')
+            ->limit(5)
+            ->get();
+
         // Carrega o gráfico diário já com o mês atual.
         $dailyChartData = $this->buildDailyChartData();
 
@@ -89,6 +104,8 @@ class DashboardController extends Controller
             'dailyChartSalesSeries' => $dailyChartData['salesSeries'],
             'dailyChartMonthLabel' => $dailyChartData['monthLabel'],
             'dailyChartMonthValue' => $dailyChartData['monthValue'],
+            'mailLastTestError' => $this->mailSettingsService->getLastTestError(),
+            'emailDispatchErrors' => $emailDispatchErrors,
         ]);
     }
 

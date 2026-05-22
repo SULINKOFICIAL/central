@@ -24,6 +24,8 @@ class MailSettingsService
         'notification_emails',
     ];
 
+    private const LAST_TEST_ERROR_KEY = 'mail.smtp.last_test_error';
+
     /**
      * Retorna a configuração SMTP efetiva do sistema.
      * Quando uma chave não existir no banco, usa o valor padrão do config/env.
@@ -60,8 +62,33 @@ class MailSettingsService
         // Nunca devolve a senha descriptografada para a tela.
         $settings['password'] = '';
         $settings['hasPassword'] = $this->hasStoredPassword();
+        $settings['last_test_error'] = $this->getLastTestError();
 
         return $settings;
+    }
+
+    /**
+     * Persiste o último erro do teste SMTP para exibição fixa na tela.
+     */
+    public function recordTestFailure(string $message): void
+    {
+        SystemSetting::updateOrCreate(
+            ['key' => self::LAST_TEST_ERROR_KEY],
+            [
+                'value' => $message,
+                'is_encrypted' => false,
+            ]
+        );
+    }
+
+    /**
+     * Limpa o erro persistente quando o teste SMTP volta a funcionar.
+     */
+    public function clearTestFailure(): void
+    {
+        SystemSetting::query()
+            ->where('key', self::LAST_TEST_ERROR_KEY)
+            ->delete();
     }
 
     /**
@@ -193,6 +220,18 @@ class MailSettingsService
             ->where('key', $this->prefix('password'))
             ->whereNotNull('value')
             ->exists();
+    }
+
+    /**
+     * Recupera o último erro do teste SMTP quando ainda não foi solucionado.
+     */
+    public function getLastTestError(): ?string
+    {
+        $setting = SystemSetting::query()
+            ->where('key', self::LAST_TEST_ERROR_KEY)
+            ->first();
+
+        return $setting?->value;
     }
 
 }

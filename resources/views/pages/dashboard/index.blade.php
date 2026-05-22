@@ -3,6 +3,51 @@
 @section('title', 'Início')
 
 @section('content')
+@if (!empty($mailLastTestError) || $emailDispatchErrors->isNotEmpty())
+  <div class="alert alert-danger d-flex align-items-start p-5 mb-6">
+    <i class="fa-solid fa-triangle-exclamation fs-2hx text-danger me-4 mt-1"></i>
+    <div class="d-flex flex-column flex-grow-1">
+      <div class="d-flex flex-column flex-md-row justify-content-between gap-3">
+        <div>
+          <span class="fw-bold text-gray-800 d-block mb-1">Falha em disparos de e-mail</span>
+          <span class="text-gray-700">
+            Existe erro ativo na configuração ou falhas recentes no envio de mensagens.
+          </span>
+        </div>
+        <div>
+          <a href="{{ route('system.settings.mail.edit') }}" class="btn btn-sm btn-light-danger">
+            Ver SMTP
+          </a>
+        </div>
+      </div>
+
+      @if (!empty($mailLastTestError))
+        <div class="mt-4">
+          <div class="fw-semibold text-gray-800 mb-1">Erro persistente do teste SMTP</div>
+          <div class="text-gray-700">{{ $mailLastTestError }}</div>
+        </div>
+      @endif
+
+      @if ($emailDispatchErrors->isNotEmpty())
+        <div class="mt-4">
+          <div class="fw-semibold text-gray-800 mb-2">Falhas nas últimas 24 horas</div>
+          <div class="d-flex flex-column gap-2">
+            @foreach ($emailDispatchErrors as $emailError)
+              <div class="text-gray-700">
+                <span class="fw-semibold">{{ $emailError->created_at->format('d/m/Y H:i') }}</span>
+                -
+                {{ $emailError->recipient_email }}
+                -
+                {{ $emailError->error_message }}
+              </div>
+            @endforeach
+          </div>
+        </div>
+      @endif
+    </div>
+  </div>
+@endif
+
 <div class="row gx-5 gx-xl-10">
   <div class="col-xl-12 mb-5 mb-xl-10">
     @include('pages.dashboard.widgets.relatorySalles')

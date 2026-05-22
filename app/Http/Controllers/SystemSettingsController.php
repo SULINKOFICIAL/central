@@ -214,6 +214,14 @@ class SystemSettingsController extends Controller
             ]
         );
 
+        if ($result['success']) {
+            $this->mailSettingsService->clearTestFailure();
+        } else {
+            $this->mailSettingsService->recordTestFailure(
+                'Falha ao enviar e-mail de teste: ' . ($result['error'] ?? 'erro desconhecido')
+            );
+        }
+
         // Centraliza a mensagem de retorno na mesma rota da tela de edição.
         return redirect()
             ->route('system.settings.mail.edit')

@@ -160,6 +160,16 @@
                     </div>
                 </div>
                 <div class="card-body">
+                    @if (!empty($mailSettings['last_test_error']))
+                        <div class="alert alert-danger d-flex align-items-start p-5 mb-6">
+                            <i class="fa-solid fa-triangle-exclamation fs-2hx text-danger me-4 mt-1"></i>
+                            <div class="d-flex flex-column">
+                                <span class="fw-bold text-gray-800 mb-1">Último teste de e-mail falhou</span>
+                                <span class="text-gray-700">{{ $mailSettings['last_test_error'] }}</span>
+                            </div>
+                        </div>
+                    @endif
+
                     <div class="mb-6">
                         <label class="form-label fw-semibold">Nome do destinatário</label>
                         <input
