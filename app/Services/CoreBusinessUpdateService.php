@@ -69,6 +69,20 @@ class CoreBusinessUpdateService
                 ],
                 'timeout' => 300,
             ],
+            [
+                'label' => 'Reiniciar filas',
+                'command' => [
+                    'sudo',
+                    '-u',
+                    'deploy',
+                    '/bin/supervisorctl',
+                    '-c',
+                    '/etc/supervisord.conf',
+                    'restart',
+                    'central-worker:*',
+                ],
+                'timeout' => 120,
+            ],
         ];
     }
 
