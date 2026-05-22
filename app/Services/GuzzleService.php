@@ -23,11 +23,28 @@ class GuzzleService
     public function request($method, $url, $tenant, $data = null, array $requestOptions = [], $type = 'api')
     {
         $guzzle = new Guzzle();
+        $centralToken = config('services.central.token');
 
-        // Define a configuração base usada em qualquer chamada para tenant.
+        /**
+         * Sem token cacheado a chamada sempre será recusada pelo tenant.
+         */
+        if (empty($centralToken)) {
+            return [
+                'success' => false,
+                'message' => 'Token da Central não configurado.',
+                'data' => $this->buildJsonResponseBody(
+                    'Token da Central não configurado.',
+                    'Verifique CENTRAL_TOKEN no .env da Central e gere novamente o cache de configuração.'
+                ),
+            ];
+        }
+
+        /**
+         * Usa config() porque a Central pode estar com config cacheado.
+         */
         $options = [
             'headers' => [
-                'Authorization' => 'Bearer ' . env('CENTRAL_TOKEN'),
+                'Authorization' => 'Bearer ' . $centralToken,
             ],
             'timeout' => 5,
         ];
@@ -136,6 +153,18 @@ class GuzzleService
 
     public function pool($method, $url, $tenant, $payloads)
     {
+        $centralToken = config('services.central.token');
+
+        /**
+         * Sem token cacheado a chamada sempre será recusada pelo tenant.
+         */
+        if (empty($centralToken)) {
+            return [
+                'success' => false,
+                'message' => 'Token da Central não configurado.',
+            ];
+        }
+
         if ($tenant->domains->count() == 0) {
             return [
                 'success' => false,
@@ -150,7 +179,7 @@ class GuzzleService
         $guzzle = new Guzzle([
             'base_uri' => $baseUrl,
             'headers' => [
-                'Authorization' => 'Bearer ' . env('CENTRAL_TOKEN'),
+                'Authorization' => 'Bearer ' . $centralToken,
                 'Accept' => 'application/json'
             ],
             'timeout' => 5

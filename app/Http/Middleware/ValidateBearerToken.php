@@ -3,10 +3,8 @@
 namespace App\Http\Middleware;
 
 use Closure;
-use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Illuminate\Support\Facades\Log;
 
 class ValidateBearerToken
 {
@@ -18,11 +16,15 @@ class ValidateBearerToken
     public function handle(Request $request, Closure $next): Response
     {
 
-        // Obter o token de autorização do cabeçalho
+        /**
+         * Obtém o token de autorização enviado pelo sistema chamador.
+         */
         $token = $request->bearerToken();
 
-        // Verificar se o token existe e é válido
-        if (!$token || $token !== env('CENTRAL_TOKEN')) {
+        /**
+         * Usa config() para continuar funcionando quando config:cache estiver ativo.
+         */
+        if (!$token || $token !== config('services.central.token')) {
             return response()->json(['error' => 'Token inválido.'], 401);
         }
 
