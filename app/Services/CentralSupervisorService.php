@@ -9,13 +9,11 @@ class CentralSupervisorService
 {
     private const SUPERVISOR_CONFIG = '/etc/supervisord.conf';
     private const SUPERVISOR_BINARY = '/bin/supervisorctl';
-    private const WORKER_TARGET = 'central-worker:*';
 
     public function status(): array
     {
         $result = $this->runSupervisorCommand([
             'status',
-            self::WORKER_TARGET,
         ]);
 
         $result['processes'] = $this->parseStatusOutput($result['output']);
@@ -27,7 +25,7 @@ class CentralSupervisorService
     {
         return $this->runSupervisorCommand([
             'restart',
-            self::WORKER_TARGET,
+            'all',
         ]);
     }
 
@@ -35,14 +33,18 @@ class CentralSupervisorService
     {
         return $this->buildSupervisorCommand([
             'restart',
-            self::WORKER_TARGET,
+            'all',
         ]);
     }
 
     private function runSupervisorCommand(array $arguments): array
     {
         try {
-            $process = new Process($this->buildSupervisorCommand($arguments), base_path());
+            $process = new Process(
+                $this->buildSupervisorCommand($arguments),
+                base_path()
+            );
+
             $process->setTimeout(120);
             $process->run();
 
@@ -65,6 +67,9 @@ class CentralSupervisorService
     private function buildSupervisorCommand(array $arguments): array
     {
         return array_merge([
+            'sudo',
+            '-u',
+            'deploy',
             self::SUPERVISOR_BINARY,
             '-c',
             self::SUPERVISOR_CONFIG,
