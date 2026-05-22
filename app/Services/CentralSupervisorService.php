@@ -7,9 +7,17 @@ use Throwable;
 
 class CentralSupervisorService
 {
+    /**
+     * Caminhos fixos do Supervisor no servidor da Central.
+     * O serviço usa esses valores tanto para consulta quanto para restart.
+     */
     private const SUPERVISOR_CONFIG = '/etc/supervisord.conf';
     private const SUPERVISOR_BINARY = '/bin/supervisorctl';
 
+    /**
+     * Consulta o status atual dos processos gerenciados pelo Supervisor.
+     * Além do retorno bruto, monta uma lista estruturada para exibir na tela.
+     */
     public function status(): array
     {
         $result = $this->runSupervisorCommand([
@@ -21,6 +29,10 @@ class CentralSupervisorService
         return $result;
     }
 
+    /**
+     * Reinicia os processos configurados no Supervisor.
+     * Esse método é usado pelo botão manual da tela de filas da Central.
+     */
     public function restart(): array
     {
         return $this->runSupervisorCommand([
@@ -29,6 +41,10 @@ class CentralSupervisorService
         ]);
     }
 
+    /**
+     * Expõe o comando de restart para ser reutilizado no fluxo de atualização da Central.
+     * Assim a rotina de deploy e a tela manual usam exatamente o mesmo comando.
+     */
     public function restartCommand(): array
     {
         return $this->buildSupervisorCommand([
@@ -37,6 +53,10 @@ class CentralSupervisorService
         ]);
     }
 
+    /**
+     * Executa um comando do Supervisor e normaliza sucesso, saída e erro.
+     * A exceção é capturada para a interface conseguir mostrar a causa operacional.
+     */
     private function runSupervisorCommand(array $arguments): array
     {
         try {
@@ -64,6 +84,10 @@ class CentralSupervisorService
         }
     }
 
+    /**
+     * Monta o comando base do Supervisor com o usuário operacional deploy.
+     * Os argumentos finais definem a ação específica, como status ou restart.
+     */
     private function buildSupervisorCommand(array $arguments): array
     {
         return array_merge([
@@ -76,6 +100,10 @@ class CentralSupervisorService
         ], $arguments);
     }
 
+    /**
+     * Converte a saída textual do supervisorctl status em linhas estruturadas.
+     * O detalhe preserva pid, uptime ou mensagem de falha retornada pelo Supervisor.
+     */
     private function parseStatusOutput(string $output): array
     {
         $processes = [];
