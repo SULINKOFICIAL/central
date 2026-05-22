@@ -139,6 +139,8 @@ class EmailService
                 'sent_at' => now(),
             ]);
 
+            $this->mailSettingsService->clearTestFailure();
+
             return [
                 'success' => true,
                 'recipient_email' => $recipient['email'],
@@ -155,6 +157,10 @@ class EmailService
                 'error_message' => $exception->getMessage(),
                 'payload' => $payload,
             ]);
+
+            $this->mailSettingsService->recordTestFailure(
+                'Falha ao enviar e-mail: ' . $exception->getMessage()
+            );
 
             return [
                 'success' => false,
