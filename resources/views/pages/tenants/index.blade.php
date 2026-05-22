@@ -149,7 +149,6 @@
                             <option value="finish_order_access">Finalizar acessos de pedidos</option>
                             <option value="update_s3_metrics">Atualizar métricas do S3</option>
                             <option value="archive_finished_tasks">Arquivar tarefas concluídas</option>
-                            <option value="refresh_mercado_livre">Atualizar token Mercado Livre</option>
                             <option value="notify_commitments_10m">Notificar compromissos (10 min antes)</option>
                             <option value="import_cfop_table">Importar CFOPs</option>
                             <option value="import_ncm_table">Importar NCMs</option>
