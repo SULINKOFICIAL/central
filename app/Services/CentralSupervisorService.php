@@ -9,7 +9,6 @@ class CentralSupervisorService
 {
     private const SUPERVISOR_CONFIG = '/etc/supervisord.conf';
     private const SUPERVISOR_BINARY = '/bin/supervisorctl';
-    private const SUPERVISOR_USER = 'deploy';
     private const WORKER_TARGET = 'central-worker:*';
 
     public function status(): array
@@ -66,10 +65,6 @@ class CentralSupervisorService
     private function buildSupervisorCommand(array $arguments): array
     {
         return array_merge([
-            'sudo',
-            '-n',
-            '-u',
-            self::SUPERVISOR_USER,
             self::SUPERVISOR_BINARY,
             '-c',
             self::SUPERVISOR_CONFIG,
