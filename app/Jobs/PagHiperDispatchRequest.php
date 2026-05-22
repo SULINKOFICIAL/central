@@ -74,8 +74,16 @@ class PagHiperDispatchRequest extends InicializerJob
         // Verifica se já existe um plano ativo cadastrado
         $plan = $this->activePlanService->findActivePlan($tenant->id);
 
-        // Busca ou cria assinatura apenas quando o PIX foi efetivamente pago
-        $subscription = $pagHiperDTO->status === 'paid' ? $this->subscriptionService->findOrCreateForPagHiper($tenant->id, $plan->id, $pagHiperDTO->transactionId, $pagHiperDTO->type) : null;
+        /**
+         * Status que representam falha ou não pagamento. Qualquer status fora
+         * desta lista (inclusive paid/completed) libera a criação da assinatura.
+         */
+        $blockedStatuses = ['failed', 'canceled', 'refunded'];
+
+        $isPaid = !in_array($pagHiperDTO->status, $blockedStatuses, true);
+
+        // Busca ou cria assinatura quando o pagamento não está em estado de falha
+        $subscription = $isPaid ? $this->subscriptionService->findOrCreateForPagHiper($tenant->id, $plan->id, $pagHiperDTO->transactionId, $pagHiperDTO->type) : null;
 
         // Monta e persiste o pagamento
         $this->pagHiperPayloadService->create($pagHiperDTO, $tenant, $subscription, $plan, $this->data);

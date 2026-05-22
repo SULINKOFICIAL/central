@@ -40,9 +40,7 @@ class TenantService
         /**
          * Localiza a transação responsável e devolve o tenant
          */
-        $transaction = OrderTransaction::where('provider', $provider)
-                                        ->where('provider_transaction_id', $providerTransactionId)
-                                        ->first();
+        $transaction = OrderTransaction::where('provider', $provider)->where('provider_transaction_id', $providerTransactionId)->first();
 
         return $transaction->order->tenant;
 

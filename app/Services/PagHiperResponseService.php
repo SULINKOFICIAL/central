@@ -33,7 +33,7 @@ class PagHiperResponseService
         $notification = $this->pagHiperService->notification($data['source_api'], $data['transaction_id'], $data['notification_id']);
 
         /**
-         * Extrai corpo 
+         * Extrai corpo
          */
         $notification = $notification['status_request'];
 
