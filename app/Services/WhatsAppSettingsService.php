@@ -50,6 +50,33 @@ class WhatsAppSettingsService
     }
 
     /**
+     * Informa quais campos obrigatórios ainda impedem disparos pela Meta.
+     */
+    public function missingMetaConfigurationLabels(array $settings = []): array
+    {
+        if (empty($settings)) {
+            $settings = $this->getSettings();
+        }
+
+        $requiredFields = [
+            'template_name' => 'Nome do template',
+            'template_language' => 'Idioma',
+            'owner_account_id' => 'Conta dona',
+            'access_token' => 'Token de acesso da Meta',
+        ];
+
+        $missingFields = [];
+
+        foreach ($requiredFields as $key => $label) {
+            if (empty($settings[$key])) {
+                $missingFields[] = $label;
+            }
+        }
+
+        return $missingFields;
+    }
+
+    /**
      * Persiste as configurações do WhatsApp informadas na tela administrativa.
      * O token é criptografado antes do armazenamento para manter o padrão do sistema.
      */
@@ -88,7 +115,12 @@ class WhatsAppSettingsService
     public function getNotificationPhones(): array
     {
         $notificationPhones = $this->getSettings()['notification_phones'] ?? '';
-        $items = preg_split('/[\s,;]+/', (string) $notificationPhones, -1, PREG_SPLIT_NO_EMPTY);
+
+        if (! is_string($notificationPhones)) {
+            $notificationPhones = '';
+        }
+
+        $items = preg_split('/[\s,;]+/', $notificationPhones, -1, PREG_SPLIT_NO_EMPTY);
 
         return array_values(array_unique($items));
     }

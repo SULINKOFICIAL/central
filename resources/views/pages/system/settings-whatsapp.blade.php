@@ -17,6 +17,20 @@
                     </div>
                 </div>
                 <div class="card-body">
+                    @if(!empty($missingWhatsAppSettings))
+                        <div class="alert alert-warning d-flex flex-column gap-2 mb-6">
+                            <div class="fw-bold">Configurações pendentes para disparar WhatsApp</div>
+                            <div>
+                                Preencha os campos abaixo antes de testar ou enviar alertas automáticos:
+                            </div>
+                            <ul class="mb-0">
+                                @foreach($missingWhatsAppSettings as $missingWhatsAppSetting)
+                                    <li>{{ $missingWhatsAppSetting }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
                     <div class="row g-6">
                         <div class="col-12">
                             <label class="form-label fw-semibold">Telefones que devem receber o template</label>

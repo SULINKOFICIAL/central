@@ -54,8 +54,11 @@ class SystemSettingsController extends Controller
      */
     public function editWhatsApp(): View
     {
+        $whatsAppSettings = $this->whatsAppSettingsService->getFormData();
+
         return view('pages.system.settings-whatsapp', [
-            'whatsAppSettings' => $this->whatsAppSettingsService->getFormData(),
+            'whatsAppSettings' => $whatsAppSettings,
+            'missingWhatsAppSettings' => $this->whatsAppSettingsService->missingMetaConfigurationLabels($whatsAppSettings),
         ]);
     }
 

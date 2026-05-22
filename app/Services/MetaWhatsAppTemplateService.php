@@ -131,11 +131,16 @@ class MetaWhatsAppTemplateService
             ];
         }
 
-        if (empty($settings['owner_account_id']) || empty($settings['access_token']) || empty($settings['template_name'])) {
+        /**
+         * Retorna os campos pendentes para a tela não exibir erro genérico.
+         */
+        $missingSettings = $this->whatsAppSettingsService->missingMetaConfigurationLabels($settings);
+
+        if (! empty($missingSettings)) {
             return [
                 'success' => false,
                 'skipped' => true,
-                'reason' => 'Configuração de WhatsApp incompleta.',
+                'reason' => 'Configuração de WhatsApp incompleta: ' . implode(', ', $missingSettings) . '.',
             ];
         }
 
@@ -192,10 +197,26 @@ class MetaWhatsAppTemplateService
      */
     private function normalizeProblemIncident(array $incident): array
     {
+        $systemName = $incident['system_name'] ?? config('app.name', 'MiCore');
+        $description = $incident['description'] ?? $incident['message'] ?? 'Problema não especificado.';
+        $eventDate = $incident['event_date'] ?? now()->format('d/m/Y H:i:s');
+
+        if (! is_string($systemName)) {
+            $systemName = config('app.name', 'MiCore');
+        }
+
+        if (! is_string($description)) {
+            $description = 'Problema não especificado.';
+        }
+
+        if (! is_string($eventDate)) {
+            $eventDate = now()->format('d/m/Y H:i:s');
+        }
+
         return array_merge($incident, [
-            'system_name' => (string) ($incident['system_name'] ?? config('app.name', 'MiCore')),
-            'description' => (string) ($incident['description'] ?? $incident['message'] ?? 'Problema não especificado.'),
-            'event_date' => (string) ($incident['event_date'] ?? now()->format('d/m/Y H:i:s')),
+            'system_name' => $systemName,
+            'description' => $description,
+            'event_date' => $eventDate,
         ]);
     }
 
