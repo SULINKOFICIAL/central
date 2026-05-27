@@ -34,6 +34,7 @@ class AppServiceProvider extends ServiceProvider
          */
         View::composer('layouts.app', function ($view) {
             $updateSystemDedicatedTenants = Tenant::where('type_installation', 'dedicated')
+                ->where('status', true)
                 ->orderBy('name')
                 ->get(['id', 'name', 'email']);
 

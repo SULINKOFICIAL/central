@@ -67,6 +67,31 @@ class TenantsActionsController extends Controller
         return $request->ajax() || $request->wantsJson();
     }
 
+    private function activeTenantById($id)
+    {
+        return $this->repository
+            ->where('id', $id)
+            ->where('status', true)
+            ->first();
+    }
+
+    private function inactiveTenantUpdateResponse(Request $request)
+    {
+        $message = 'Sistema inativo não pode ser atualizado pela Central.';
+
+        if ($this->shouldReturnJson($request)) {
+            return response()->json([
+                'success' => false,
+                'message' => $message,
+            ], 422);
+        }
+
+        return redirect()
+            ->route('tenants.index')
+            ->with('type', 'warning')
+            ->with('message', $message);
+    }
+
     private function tenantApiRawError(array $response): string
     {
         return $response['data'] ?? $response['message'] ?? $response ?? 'Erro desconhecido';
@@ -81,12 +106,20 @@ class TenantsActionsController extends Controller
         /**
          * Obtém todos os clientes
          */
-        $clientsId = $this->repository->all();
+        $clientsId = $this->repository->where('status', true)->get();
         
         /**
-         * Sinaliza todos como desatualizados
+         * Sinaliza apenas clientes ativos como desatualizados.
          */
-        TenantRuntimeStatus::update(['db_last_version' => false]);
+        $activeTenantIds = [];
+
+        foreach ($clientsId as $tenant) {
+            $activeTenantIds[] = $tenant->id;
+        }
+
+        if (!empty($activeTenantIds)) {
+            TenantRuntimeStatus::whereIn('tenant_id', $activeTenantIds)->update(['db_last_version' => false]);
+        }
         
         /**
          * Contador de erros
@@ -105,7 +138,7 @@ class TenantsActionsController extends Controller
             /**
              * Se a atualização retornar false incrementa o contador de erros
              */
-            if ($this->updateDatabase($tenant->id)) {
+            if (!$this->updateDatabase($tenant->id)) {
                 $errors++;
             }
         }
@@ -190,6 +223,7 @@ class TenantsActionsController extends Controller
 
             $selectedTenant = $this->repository
                 ->where('type_installation', 'dedicated')
+                ->where('status', true)
                 ->find($selectedTenantId);
 
             if (!$selectedTenant) {
@@ -356,7 +390,7 @@ class TenantsActionsController extends Controller
         /**
          * Obtém todos os clientes
          */
-        $clients = $this->repository->all();
+        $clients = $this->repository->where('status', true)->get();
 
         /**
          * Define os tenants afetados pelo escopo escolhido no modal.
@@ -586,7 +620,12 @@ class TenantsActionsController extends Controller
         /**
          * Encontra o cliente
          */
-        $tenant = $this->repository->find($id);
+        $tenant = $this->activeTenantById($id);
+
+        if (!$tenant) {
+            return false;
+        }
+
         $runtimeStatus = $this->runtimeStatusFor($tenant);
 
         /**
@@ -631,7 +670,12 @@ class TenantsActionsController extends Controller
         /**
          * Encontra o cliente
          */
-        $tenant = $this->repository->find($id);
+        $tenant = $this->activeTenantById($id);
+
+        if (!$tenant) {
+            return false;
+        }
+
         $runtimeStatus = $this->runtimeStatusFor($tenant);
 
         /**
@@ -672,7 +716,12 @@ class TenantsActionsController extends Controller
         /**
          * Encontra o cliente
          */
-        $tenant = $this->repository->find($id);
+        $tenant = $this->activeTenantById($id);
+
+        if (!$tenant) {
+            return false;
+        }
+
         $runtimeStatus = $this->runtimeStatusFor($tenant);
 
         /**
@@ -720,7 +769,11 @@ class TenantsActionsController extends Controller
         /**
          * Encontra o cliente
          */
-        $tenant = $this->repository->find($id);
+        $tenant = $this->activeTenantById($id);
+
+        if (!$tenant) {
+            return $this->inactiveTenantUpdateResponse($request);
+        }
 
         /**
          * Realiza solicitação
@@ -811,7 +864,11 @@ class TenantsActionsController extends Controller
         /**
          * Encontra o cliente
          */
-        $tenant = $this->repository->find($id);
+        $tenant = $this->activeTenantById($id);
+
+        if (!$tenant) {
+            return $this->inactiveTenantUpdateResponse($request);
+        }
 
         /**
          * Realiza solicitação
@@ -824,7 +881,10 @@ class TenantsActionsController extends Controller
          */
         if ($tenant->type_installation === 'shared') {
             $sharedRuntimeStatus = $this->runtimeStatusFor($tenant)->refresh();
-            $sharedTenants = $this->repository->where('type_installation', 'shared')->get();
+            $sharedTenants = $this->repository
+                ->where('type_installation', 'shared')
+                ->where('status', true)
+                ->get();
 
             foreach ($sharedTenants as $sharedTenant) {
                 $this->runtimeStatusFor($sharedTenant)->update([
@@ -863,7 +923,11 @@ class TenantsActionsController extends Controller
         /**
          * Encontra o cliente
          */
-        $tenant = $this->repository->find($id);
+        $tenant = $this->activeTenantById($id);
+
+        if (!$tenant) {
+            return $this->inactiveTenantUpdateResponse($request);
+        }
 
         /**
          * Realiza solicitação
@@ -875,7 +939,10 @@ class TenantsActionsController extends Controller
          */
         if ($tenant->type_installation === 'shared') {
             $sharedRuntimeStatus = $this->runtimeStatusFor($tenant)->refresh();
-            $sharedTenants = $this->repository->where('type_installation', 'shared')->get();
+            $sharedTenants = $this->repository
+                ->where('type_installation', 'shared')
+                ->where('status', true)
+                ->get();
 
             foreach ($sharedTenants as $sharedTenant) {
                 $this->runtimeStatusFor($sharedTenant)->update([
@@ -914,7 +981,12 @@ class TenantsActionsController extends Controller
         /**
          * Encontra o cliente
          */
-        $tenant = $this->repository->find($id);
+        $tenant = $this->activeTenantById($id);
+
+        if (!$tenant) {
+            return false;
+        }
+
         $runtimeStatus = $this->runtimeStatusFor($tenant);
 
         /**
@@ -979,7 +1051,12 @@ class TenantsActionsController extends Controller
         /**
          * Encontra o cliente para executar a ação e atualizar o status visual.
          */
-        $tenant = $this->repository->find($id);
+        $tenant = $this->activeTenantById($id);
+
+        if (!$tenant) {
+            return $this->inactiveTenantUpdateResponse($request);
+        }
+
         $updated = $this->runNpmBuild($tenant->id);
 
         /**
@@ -988,7 +1065,10 @@ class TenantsActionsController extends Controller
          */
         if ($tenant->type_installation === 'shared') {
             $sharedRuntimeStatus = $this->runtimeStatusFor($tenant)->refresh();
-            $sharedTenants = $this->repository->where('type_installation', 'shared')->get();
+            $sharedTenants = $this->repository
+                ->where('type_installation', 'shared')
+                ->where('status', true)
+                ->get();
 
             foreach ($sharedTenants as $sharedTenant) {
                 $this->runtimeStatusFor($sharedTenant)->update([
