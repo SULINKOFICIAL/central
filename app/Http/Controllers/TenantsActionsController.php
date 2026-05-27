@@ -86,7 +86,7 @@ class TenantsActionsController extends Controller
         /**
          * Sinaliza todos como desatualizados
          */
-        TenantRuntimeStatus::query()->update(['db_last_version' => false]);
+        TenantRuntimeStatus::update(['db_last_version' => false]);
         
         /**
          * Contador de erros
@@ -1214,7 +1214,6 @@ class TenantsActionsController extends Controller
             'archive_finished_tasks',
             'emails:process-actions',
             'email-inbox:import',
-            'notify_commitments_10m',
             'import_cfop_table',
             'import_ncm_table',
         ];

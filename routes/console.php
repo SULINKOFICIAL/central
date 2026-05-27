@@ -33,13 +33,6 @@ Schedule::job(new ScheduleDispatcher('email-inbox:import'))
         ->withoutOverlapping()
         ->onOneServer();
 
-// Lembretes de compromissos para começar em 10 minutos.
-Schedule::job(new ScheduleDispatcher('notify_commitments_10m', [
-            'minutes_before' => 10,
-        ]))
-        ->everyMinute()
-        ->onOneServer();
-
 Schedule::job(new RefreshTokenIntegrationsJob())
         ->dailyAt('01:00')
         ->onOneServer();
