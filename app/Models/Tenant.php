@@ -55,6 +55,14 @@ class Tenant extends Model
         return $this->hasOne(TenantProvisioning::class, 'tenant_id', 'id');
     }
 
+    /**
+     * Roteamento usado pelos aplicativos MiCore.
+     */
+    public function appRoute(): HasOne
+    {
+        return $this->hasOne(TenantAppRoute::class, 'tenant_id', 'id');
+    }
+
     // Status técnico de atualização do cliente
     public function runtimeStatus(): HasOne
     {

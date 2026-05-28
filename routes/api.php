@@ -32,9 +32,11 @@ Route::prefix('central')->middleware('auth.bearer')->group(function () {
     });
 
     /** Retorna as informações do banco de dados */
-    Route::get('/meu-banco',      [ApisDiscoveryController::class, 'getDatabase']);
-    Route::get('/modulos',        [ApisUtilityController::class, 'modules']);
-    Route::get('/pacotes',        [ApisUtilityController::class, 'packages']);
+    Route::get('/meu-banco',                [ApisDiscoveryController::class, 'getDatabase']);
+    Route::get('/banco-por-tenant',         [ApisDiscoveryController::class, 'getDatabaseByTenant']);
+    Route::get('/app/tenant-resolution',    [ApisDiscoveryController::class, 'getAppTenantResolution']);
+    Route::get('/modulos',                  [ApisUtilityController::class, 'modules']);
+    Route::get('/pacotes',                  [ApisUtilityController::class, 'packages']);
 
     /** APIS que necessitam de um cliente */
     Route::middleware('attach.tenant')->group(function () {
