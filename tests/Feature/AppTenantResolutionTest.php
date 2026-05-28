@@ -2,6 +2,7 @@
 
 use App\Models\Tenant;
 use App\Models\TenantAppRoute;
+use App\Models\TenantDomain;
 use App\Models\TenantProvisioning;
 use App\Models\User;
 use Illuminate\Support\Facades\Crypt;
@@ -74,6 +75,42 @@ it('returns remote api route by tenant id', function () {
             'mode'      => TenantAppRoute::MODE_REMOTE_API,
             'api'       => [
                 'base_url'      => 'https://cliente.com.br/api/app',
+                'service_token' => 'service-token',
+            ],
+        ]);
+});
+
+it('builds remote api url from active tenant domain', function () {
+    $operator = User::factory()->create();
+
+    $tenant = Tenant::create([
+        'name'       => 'Cliente App Remoto Dominio',
+        'domain'     => 'cliente-app-remoto-dominio.test',
+        'created_by' => $operator->id,
+    ]);
+
+    TenantDomain::create([
+        'tenant_id' => $tenant->id,
+        'domain'    => 'sulink.com.br',
+        'status'    => true,
+    ]);
+
+    TenantAppRoute::create([
+        'tenant_id'            => $tenant->id,
+        'mode'                 => TenantAppRoute::MODE_REMOTE_API,
+        'remote_service_token' => Crypt::encryptString('service-token'),
+        'status'               => true,
+    ]);
+
+    $response = $this->withToken('central-test-token')
+        ->getJson('/api/central/app/tenant-resolution?tenant_id=' . $tenant->id);
+
+    $response->assertOk()
+        ->assertJson([
+            'tenant_id' => $tenant->id,
+            'mode'      => TenantAppRoute::MODE_REMOTE_API,
+            'api'       => [
+                'base_url'      => 'https://sulink.com.br/api/app',
                 'service_token' => 'service-token',
             ],
         ]);

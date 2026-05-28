@@ -205,11 +205,22 @@ class ApisDiscoveryController extends Controller
         $route = $tenant->appRoute;
 
         /**
-         * Exige URL e token técnico para o centralizador chamar a API externa.
+         * Exige token técnico para o centralizador chamar a API externa.
          */
-        if (!$route->remote_base_url || !$route->remote_service_token) {
+        if (!$route->remote_service_token) {
             return response()->json([
                 'error' => 'Rota remota do tenant incompleta.',
+            ], 422);
+        }
+
+        $baseUrl = $route->remote_base_url ?: $this->activeDomainAppUrl($tenant);
+
+        /**
+         * Usa domínio ativo como fallback quando a rota não tiver URL específica.
+         */
+        if (!$baseUrl) {
+            return response()->json([
+                'error' => 'Tenant remoto sem domínio ativo para aplicativo.',
             ], 422);
         }
 
@@ -217,10 +228,37 @@ class ApisDiscoveryController extends Controller
             'tenant_id' => $tenant->id,
             'mode'      => TenantAppRoute::MODE_REMOTE_API,
             'api'       => [
-                'base_url'      => $route->remote_base_url,
+                'base_url'      => $baseUrl,
                 'service_token' => Crypt::decryptString($route->remote_service_token),
             ],
         ]);
+    }
+
+    /**
+     * Monta a URL /api/app a partir do domínio ativo do tenant.
+     */
+    private function activeDomainAppUrl(Tenant $tenant): ?string
+    {
+        $domain = $tenant->domains()
+            ->where('status', true)
+            ->orderBy('id')
+            ->value('domain');
+
+        /**
+         * Sem domínio ativo não há como gerar URL remota para o app.
+         */
+        if (!$domain) {
+            return null;
+        }
+
+        /**
+         * Preserva domínios já cadastrados com protocolo.
+         */
+        if (str_starts_with($domain, 'http://') || str_starts_with($domain, 'https://')) {
+            return $domain . '/api/app';
+        }
+
+        return 'https://' . $domain . '/api/app';
     }
 
     /**
