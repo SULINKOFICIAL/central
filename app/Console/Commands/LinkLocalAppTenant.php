@@ -33,6 +33,9 @@ class LinkLocalAppTenant extends Command
      */
     public function handle(): int
     {
+        /**
+         * Coleta todas as opções antes de alterar qualquer registro.
+         */
         $tenantId       = $this->requiredOption('tenant-id');
         $tenantName     = $this->requiredOption('name');
         $tenantDatabase = $this->requiredOption('database');
@@ -42,6 +45,9 @@ class LinkLocalAppTenant extends Command
         $operatorEmail  = $this->option('operator-email') ?: 'local-app@micore.test';
 
         try {
+            /**
+             * Valida ambiente, banco e usuário final antes de criar o vínculo.
+             */
             $this->assertSafeEnvironment();
             $this->assertDatabaseExists($tenantDatabase);
             $this->assertTenantUserExists($tenantDatabase, $tenantEmail);
@@ -70,6 +76,9 @@ class LinkLocalAppTenant extends Command
      */
     private function assertSafeEnvironment(): void
     {
+        /**
+         * Produção nunca deve receber vínculos manuais de desenvolvimento.
+         */
         if (app()->environment('production')) {
             throw new RuntimeException('Este comando só deve ser usado em ambiente local ou de desenvolvimento.');
         }
@@ -80,6 +89,9 @@ class LinkLocalAppTenant extends Command
      */
     private function requiredOption(string $name)
     {
+        /**
+         * Options obrigatórias precisam vir preenchidas no comando.
+         */
         $value = $this->option($name);
 
         if ($value === null || $value === '') {
@@ -94,6 +106,9 @@ class LinkLocalAppTenant extends Command
      */
     private function assertDatabaseExists($database): void
     {
+        /**
+         * SHOW DATABASES confirma se o banco do tenant existe localmente.
+         */
         $databases = DB::select('SHOW DATABASES');
 
         foreach ($databases as $row) {
@@ -110,6 +125,9 @@ class LinkLocalAppTenant extends Command
      */
     private function assertTenantUserExists($database, $email): void
     {
+        /**
+         * Sem e-mail de referência, o comando não valida usuário final.
+         */
         if (!$email) {
             return;
         }
@@ -117,6 +135,9 @@ class LinkLocalAppTenant extends Command
         $originalDatabase = config('database.connections.mysql.database');
 
         try {
+            /**
+             * Troca temporariamente para o banco do tenant para consultar users.
+             */
             Config::set('database.connections.mysql.database', $database);
             DB::purge('mysql');
             DB::reconnect('mysql');
@@ -144,6 +165,9 @@ class LinkLocalAppTenant extends Command
      */
     private function ensureCentralOperator($operatorEmail)
     {
+        /**
+         * Reusa operador técnico quando ele já existe na Central.
+         */
         $operator = DB::table('users')
             ->where('email', $operatorEmail)
             ->first();
@@ -152,6 +176,9 @@ class LinkLocalAppTenant extends Command
             return $operator->id;
         }
 
+        /**
+         * Cria operador técnico mínimo para registros criados pelo comando.
+         */
         DB::table('users')->insert([
             'name'       => 'Operador Local App',
             'email'      => $operatorEmail,
@@ -171,6 +198,9 @@ class LinkLocalAppTenant extends Command
      */
     private function linkTenant($tenantId, $tenantName, $tenantDatabase, $tenantDbUser, $tenantDbPass, $tenantEmail, $operatorId): void
     {
+        /**
+         * A transação mantém tenant, provisioning e rota app sincronizados.
+         */
         DB::transaction(function () use ($tenantId, $tenantName, $tenantDatabase, $tenantDbUser, $tenantDbPass, $tenantEmail, $operatorId) {
             $now = now();
 
@@ -226,6 +256,9 @@ class LinkLocalAppTenant extends Command
      */
     private function firstUserPayload($tenantEmail)
     {
+        /**
+         * Payload informativo é opcional e só existe quando há e-mail.
+         */
         if (!$tenantEmail) {
             return null;
         }

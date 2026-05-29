@@ -30,6 +30,9 @@ class TenantAppRoute extends Model
      */
     public function tenant(): BelongsTo
     {
+        /**
+         * A rota do app sempre pertence a um tenant registrado na Central.
+         */
         return $this->belongsTo(Tenant::class, 'tenant_id', 'id');
     }
 }

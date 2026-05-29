@@ -26,6 +26,9 @@ class SyncAppTenantRoutes extends Command
      */
     public function handle(): int
     {
+        /**
+         * Flags definem escopo, sobrescrita e simulação da sincronização.
+         */
         $tenantId = $this->option('tenant-id');
         $force    = $this->option('force') === true;
         $dryRun   = $this->option('dry-run') === true;
@@ -34,6 +37,9 @@ class SyncAppTenantRoutes extends Command
         $updated = 0;
         $skipped = 0;
 
+        /**
+         * Processa tenants antigos para garantir rota de app no registry.
+         */
         $tenants = DB::table('tenants')
             ->select(['id', 'name', 'type_installation', 'token'])
             ->when($tenantId, function ($query) use ($tenantId) {
@@ -103,6 +109,9 @@ class SyncAppTenantRoutes extends Command
      */
     private function routeDataForTenant($tenant): ?array
     {
+        /**
+         * O timestamp é compartilhado para manter created_at e updated_at coerentes.
+         */
         $now = now();
 
         /**
