@@ -138,21 +138,34 @@ class TenantManualPlanController extends Controller
                 ->first();
 
             if (!$subscription) {
+                /**
+                 * Assinatura administrativa não passa pelo provedor de pagamento.
+                 * Mesmo assim, a tabela exige o intervalo usado pelos fluxos pagos.
+                 */
                 $subscription = Subscription::create([
                     'tenant_id'                 => $tenant->id,
                     'plan_id'                   => $activePlan->id,
                     'provider'                  => 'pagarme',
                     'provider_subscription_id'  => 'manual-admin-' . $tenant->id,
+                    'interval'                  => 'year',
                     'payment_method'            => 'manual_admin',
                     'currency'                  => 'BRL',
                     'installments'              => 1,
                     'status'                    => 'active',
                 ]);
             } else {
+                /**
+                 * Garante que assinaturas antigas incompletas também fiquem válidas
+                 * antes de gerar um novo ciclo manual.
+                 */
                 $subscription->update([
-                    'provider' => 'pagarme',
-                    'plan_id' => $activePlan->id,
-                    'status' => 'active',
+                    'provider'       => 'pagarme',
+                    'plan_id'        => $activePlan->id,
+                    'interval'       => $subscription->interval ?: 'year',
+                    'payment_method' => $subscription->payment_method ?: 'manual_admin',
+                    'currency'       => $subscription->currency ?: 'BRL',
+                    'installments'   => $subscription->installments ?: 1,
+                    'status'         => 'active',
                 ]);
             }
 
