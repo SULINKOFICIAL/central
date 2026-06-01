@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Tenant;
 use App\Models\TenantDomain;
 use App\Models\TenantProvisioning;
+use App\Models\City;
 use App\Models\Module;
 use App\Models\Package;
+use App\Models\State;
 use App\Services\GuzzleService;
 use App\Services\TenantInitialTrialPlanService;
 use Illuminate\Http\Request;
@@ -45,9 +47,23 @@ class TenantController extends Controller
      */
     public function create()
     {
+        $selectedStateId = old('company_state_id');
+        $cities = collect();
 
-        // Retorna a página
-        return view('pages.tenants.create');
+        if (!empty($selectedStateId)) {
+            $cities = City::where('state_id', $selectedStateId)
+                ->where('status', 1)
+                ->orderBy('name')
+                ->get();
+        }
+
+        /**
+         * Retorna a página com o catálogo local sincronizado do MiCore.
+         */
+        return view('pages.tenants.create', [
+            'states' => State::where('status', 1)->orderBy('name')->get(),
+            'cities' => $cities,
+        ]);
 
     }
 
@@ -130,11 +146,13 @@ class TenantController extends Controller
             'name'                       => ['required', 'string', 'max:255'],
             'company'                    => ['required', 'string', 'max:255'],
             'email'                      => ['required', 'email', 'max:255'],
+            'whatsapp'                   => ['required', 'string', 'max:20'],
             'domain'                     => ['required', 'string', 'max:255'],
             'document_type'              => ['required', 'in:cnpj,cpf'],
             'document_number'            => ['required', 'string', 'max:20'],
             'company_zip_code'           => ['required', 'string', 'size:8'],
-            'company_city_state'         => ['required', 'string', 'max:255'],
+            'company_state_id'           => ['required', 'integer', 'exists:states,id'],
+            'company_city_id'            => ['required', 'integer', 'exists:cities,id'],
             'company_neighborhood'       => ['required', 'string', 'max:255'],
             'company_address'            => ['required', 'string', 'max:255'],
             'company_number'             => ['required', 'string', 'max:20'],
@@ -148,6 +166,7 @@ class TenantController extends Controller
         $trialDays = $validated['trial_days'] ?? TenantInitialTrialPlanService::DEFAULT_TRIAL_DAYS;
         $documentNumber = onlyNumbers($validated['document_number']);
         $zipCode = onlyNumbers($validated['company_zip_code']);
+        $whatsapp = onlyNumbers($validated['whatsapp']);
 
         if (empty($documentNumber)) {
             return redirect()
@@ -160,6 +179,20 @@ class TenantController extends Controller
             return redirect()
                 ->back()
                 ->withErrors(['company_zip_code' => 'CEP deve conter 8 dígitos.'])
+                ->withInput();
+        }
+
+        if (empty($whatsapp)) {
+            return redirect()
+                ->back()
+                ->withErrors(['whatsapp' => 'Informe o WhatsApp da conta.'])
+                ->withInput();
+        }
+
+        if (!City::where('id', $validated['company_city_id'])->where('state_id', $validated['company_state_id'])->exists()) {
+            return redirect()
+                ->back()
+                ->withErrors(['company_city_id' => 'Selecione uma cidade válida para o estado escolhido.'])
                 ->withInput();
         }
 
@@ -195,9 +228,12 @@ class TenantController extends Controller
                 ->withInput();
         }
 
-        // Obtém dados
+        /**
+         * Monta o payload persistido já com os campos normalizados.
+         */
         $data = $request->all();
         $data['company_zip_code'] = $zipCode;
+        $data['whatsapp'] = $whatsapp;
         $data['cnpj'] = null;
         $data['cpf'] = null;
 
@@ -209,28 +245,44 @@ class TenantController extends Controller
             $data['cpf'] = $documentNumber;
         }
 
-        // Autor
+        /**
+         * Autor administrativo padrão usado pelo fluxo atual da Central.
+         */
         $data['created_by'] = 1;
 
-        // Gera um domínio permitido
+        /**
+         * Gera um domínio permitido.
+         */
         $data['domain'] = verifyIfAllow($data['domain']);
 
-        // Gera um nome de tabela permitido
+        /**
+         * Gera um nome de tabela permitido.
+         */
         $domainClean = str_replace('-', '_', $data['domain']);
 
-        // Insere prefixo do miCore
+        /**
+         * Insere prefixo do miCore no nome do banco.
+         */
         $data['table'] = env('CPANEL_PREFIX') . '_' . $domainClean;
 
-        // Insere prefixo do miCore
+        /**
+         * Insere prefixo do miCore no usuário do banco.
+         */
         $data['table_user'] = env('CPANEL_PREFIX') . '_' . $domainClean;
 
-        // Gera senha
+        /**
+         * Gera senha do usuário MySQL do tenant.
+         */
         $data['table_password'] = Str::random(12);
 
-        // Gera token para API
+        /**
+         * Gera token para API.
+         */
         $data['token'] = hash('sha256', $data['domain'] . microtime(true));
 
-        // Gera usuário
+        /**
+         * Gera usuário inicial.
+         */
         $data['first_user'] = [
             'name'       => $data['user']['name'],
             'email'      => $data['user']['email'],

@@ -26,6 +26,8 @@ Route::prefix('central')->middleware('auth.bearer')->group(function () {
      */
     Route::post('/encontrar-cliente', [ApisDiscoveryController::class, 'findTenant']);
     Route::prefix('onboarding')->group(function () {
+        Route::get('/estados',              [ApisOnboardingController::class, 'states']);
+        Route::get('/cidades',              [ApisOnboardingController::class, 'cities']);
         Route::post('/verificar-identidade', [ApisOnboardingController::class, 'checkOnboardingIdentity']);
         Route::post('/salvar-etapa',         [ApisOnboardingController::class, 'saveOnboardingStep']);
         Route::post('/finalizar',            [ApisOnboardingController::class, 'finalizeOnboarding']);

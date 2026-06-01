@@ -49,8 +49,8 @@
                         <input type="number" class="form-control form-control-solid" placeholder="30" name="trial_days" value="{{ old('trial_days', 30) }}" min="1" max="365" required>
                     </div>
                     <div class="col-12 col-md-6 mb-4">
-                        <label class="form-label fs-6 fw-bold text-gray-700 mb-2">WhatsApp</label>
-                        <input type="text" class="form-control form-control-solid" placeholder="48999999999" name="whatsapp" value="{{ old('whatsapp') }}" maxlength="20">
+                        <label class="form-label fs-6 fw-bold text-gray-700 mb-2 required">WhatsApp</label>
+                        <input type="text" class="form-control form-control-solid" placeholder="48999999999" name="whatsapp" id="tenant_whatsapp" value="{{ old('whatsapp') }}" inputmode="numeric" pattern="[0-9]*" maxlength="20" required>
                     </div>
                 </div>
             </div>
@@ -104,9 +104,23 @@
                         <label class="form-label fs-6 fw-bold text-gray-700 mb-2 required">CEP</label>
                         <input type="text" class="form-control form-control-solid" placeholder="88000000" name="company_zip_code" value="{{ old('company_zip_code') }}" inputmode="numeric" pattern="[0-9]*" maxlength="8" required>
                     </div>
+                    <div class="col-12 col-md-3 mb-4">
+                        <label class="form-label fs-6 fw-bold text-gray-700 mb-2 required">Estado</label>
+                        <select class="form-select form-select-solid" name="company_state_id" id="tenant_company_state_id" required>
+                            <option value="">Selecione</option>
+                            @foreach (($states ?? []) as $state)
+                                <option value="{{ $state->id }}" data-acronym="{{ $state->acronym }}" @if (old('company_state_id') == $state->id) selected @endif>{{ $state->name }} ({{ $state->acronym }})</option>
+                            @endforeach
+                        </select>
+                    </div>
                     <div class="col-12 col-md-5 mb-4">
-                        <label class="form-label fs-6 fw-bold text-gray-700 mb-2 required">Cidade/UF</label>
-                        <input type="text" class="form-control form-control-solid" placeholder="Florianopolis/SC" name="company_city_state" value="{{ old('company_city_state') }}" maxlength="255" required>
+                        <label class="form-label fs-6 fw-bold text-gray-700 mb-2 required">Cidade</label>
+                        <select class="form-select form-select-solid" name="company_city_id" id="tenant_company_city_id" data-selected-city="{{ old('company_city_id') }}" required>
+                            <option value="">Selecione o estado</option>
+                            @foreach (($cities ?? []) as $city)
+                                <option value="{{ $city->id }}" data-code-ibge="{{ $city->code_ibge }}" @if (old('company_city_id') == $city->id) selected @endif>{{ $city->name }}</option>
+                            @endforeach
+                        </select>
                     </div>
                     <div class="col-12 col-md-4 mb-4">
                         <label class="form-label fs-6 fw-bold text-gray-700 mb-2 required">Bairro</label>
@@ -151,10 +165,12 @@
     document.addEventListener('DOMContentLoaded', function () {
         const documentType = document.getElementById('tenant_document_type');
         const documentNumber = document.getElementById('tenant_document_number');
+        const tenantWhatsApp = document.getElementById('tenant_whatsapp');
         const tenantDomain = document.getElementById('tenant_domain');
         const tenantDomainFeedback = document.getElementById('tenant_domain_feedback');
         const zipCode = document.querySelector('[name="company_zip_code"]');
-        const cityState = document.querySelector('[name="company_city_state"]');
+        const stateSelect = document.getElementById('tenant_company_state_id');
+        const citySelect = document.getElementById('tenant_company_city_id');
         const neighborhood = document.querySelector('[name="company_neighborhood"]');
         const address = document.querySelector('[name="company_address"]');
 
@@ -175,8 +191,111 @@
             documentNumber.value = documentNumber.value.replace(/\D/g, '').slice(0, documentNumber.maxLength);
         });
 
+        if (tenantWhatsApp) {
+            tenantWhatsApp.addEventListener('input', function () {
+                tenantWhatsApp.value = tenantWhatsApp.value.replace(/\D/g, '').slice(0, 20);
+            });
+        }
+
+        function resetCities(label) {
+            if (!citySelect) {
+                return;
+            }
+
+            citySelect.innerHTML = '<option value="">' + label + '</option>';
+        }
+
+        function selectCityByIbge(codeIbge) {
+            if (!citySelect || !codeIbge) {
+                return;
+            }
+
+            Array.prototype.forEach.call(citySelect.options, function (option) {
+                if (option.dataset.codeIbge === codeIbge) {
+                    citySelect.value = option.value;
+                }
+            });
+        }
+
+        function loadCities(stateId, selectedCityId, selectedCodeIbge) {
+            if (!citySelect) {
+                return Promise.resolve();
+            }
+
+            if (!stateId) {
+                resetCities('Selecione o estado');
+                return Promise.resolve();
+            }
+
+            resetCities('Carregando cidades...');
+
+            const url = '{{ route('tenants.locations.cities', [], false) }}?state_id=' + encodeURIComponent(stateId);
+
+            return fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                },
+            })
+                .then(function (response) {
+                    return response.json();
+                })
+                .then(function (payload) {
+                    resetCities('Selecione');
+
+                    payload.cities.forEach(function (city) {
+                        const option = document.createElement('option');
+                        option.value = city.id;
+                        option.textContent = city.name;
+                        option.dataset.codeIbge = city.code_ibge;
+                        citySelect.appendChild(option);
+                    });
+
+                    if (selectedCityId) {
+                        citySelect.value = selectedCityId;
+                    }
+
+                    if (selectedCodeIbge) {
+                        selectCityByIbge(selectedCodeIbge);
+                    }
+                })
+                .catch(function () {
+                    resetCities('Não foi possível carregar cidades');
+                });
+        }
+
+        function selectStateByAcronym(acronym) {
+            if (!stateSelect || !acronym) {
+                return null;
+            }
+
+            let selectedStateId = null;
+
+            Array.prototype.forEach.call(stateSelect.options, function (option) {
+                if (option.dataset.acronym === acronym) {
+                    stateSelect.value = option.value;
+                    selectedStateId = option.value;
+                }
+            });
+
+            return selectedStateId;
+        }
+
+        if (stateSelect) {
+            stateSelect.addEventListener('change', function () {
+                if (citySelect) {
+                    citySelect.dataset.selectedCity = '';
+                }
+
+                loadCities(stateSelect.value, null, null);
+            });
+        }
+
+        if (stateSelect && citySelect && stateSelect.value && citySelect.options.length <= 1) {
+            loadCities(stateSelect.value, citySelect.dataset.selectedCity, null);
+        }
+
         function fillAddressFromZipCode() {
-            if (!zipCode || !cityState || !neighborhood || !address) {
+            if (!zipCode || !stateSelect || !citySelect || !neighborhood || !address) {
                 return;
             }
 
@@ -196,7 +315,12 @@
                         return;
                     }
 
-                    cityState.value = payload.localidade + '/' + payload.uf;
+                    const selectedStateId = selectStateByAcronym(payload.uf);
+
+                    if (selectedStateId) {
+                        loadCities(selectedStateId, null, payload.ibge);
+                    }
+
                     neighborhood.value = payload.bairro || neighborhood.value;
                     address.value = payload.logradouro || address.value;
                 })

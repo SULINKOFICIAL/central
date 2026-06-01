@@ -3,9 +3,34 @@
 use App\Models\Module;
 use App\Models\Tenant;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 it('allows choosing the initial trial days when creating a tenant in central', function () {
     $operator = User::factory()->create();
+
+    DB::table('states')->insert([
+        'id' => 16,
+        'country_id' => 26,
+        'name' => 'Paraná',
+        'acronym' => 'PR',
+        'code' => 41,
+        'cuf' => 41,
+        'status' => 1,
+        'created_by' => 1,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    DB::table('cities')->insert([
+        'id' => 4179,
+        'state_id' => 16,
+        'name' => 'Curitiba',
+        'code_ibge' => 4106902,
+        'status' => 1,
+        'created_by' => 1,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
 
     Module::create([
         'name' => 'Atendimento',
@@ -25,8 +50,10 @@ it('allows choosing the initial trial days when creating a tenant in central', f
             'domain' => 'cliente-trial-customizado',
             'document_type' => 'cnpj',
             'document_number' => '99000000000003',
+            'whatsapp' => '41999999999',
             'company_zip_code' => '88000000',
-            'company_city_state' => 'Florianopolis/SC',
+            'company_state_id' => 16,
+            'company_city_id' => 4179,
             'company_neighborhood' => 'Centro',
             'company_address' => 'Rua Trial',
             'company_number' => '100',
@@ -46,6 +73,8 @@ it('allows choosing the initial trial days when creating a tenant in central', f
     expect($tenant->email)->toBe('conta.trial@micore.com.br');
     expect($tenant->cnpj)->toBe('99000000000003');
     expect($tenant->company_zip_code)->toBe('88000000');
+    expect($tenant->company_state_id)->toBe(16);
+    expect($tenant->company_city_id)->toBe(4179);
 
     $this->assertDatabaseHas('tenants_plans', [
         'tenant_id' => $tenant->id,
@@ -67,6 +96,19 @@ it('allows choosing the initial trial days when creating a tenant in central', f
 it('shows thirty days as the default trial period in the tenant creation form', function () {
     $operator = User::factory()->create();
 
+    DB::table('states')->insert([
+        'id' => 16,
+        'country_id' => 26,
+        'name' => 'Paraná',
+        'acronym' => 'PR',
+        'code' => 41,
+        'cuf' => 41,
+        'status' => 1,
+        'created_by' => 1,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
     $this->actingAs($operator)
         ->get(route('tenants.create'))
         ->assertOk()
@@ -75,5 +117,7 @@ it('shows thirty days as the default trial period in the tenant creation form', 
         ->assertSee('name="company"', false)
         ->assertSee('name="email"', false)
         ->assertSee('name="document_type"', false)
-        ->assertSee('name="document_number"', false);
+        ->assertSee('name="document_number"', false)
+        ->assertSee('name="company_state_id"', false)
+        ->assertSee('name="company_city_id"', false);
 });

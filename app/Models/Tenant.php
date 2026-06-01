@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -28,7 +29,8 @@ class Tenant extends Model
         'cpf',
         'company_profile',
         'company_zip_code',
-        'company_city_state',
+        'company_state_id',
+        'company_city_id',
         'company_address',
         'company_neighborhood',
         'company_number',
@@ -87,6 +89,22 @@ class Tenant extends Model
     public function domains(): HasMany
     {
         return $this->hasMany(TenantDomain::class, 'tenant_id', 'id');
+    }
+
+    /**
+     * Estado da loja inicial do tenant.
+     */
+    public function companyState(): BelongsTo
+    {
+        return $this->belongsTo(State::class, 'company_state_id', 'id');
+    }
+
+    /**
+     * Cidade da loja inicial do tenant.
+     */
+    public function companyCity(): BelongsTo
+    {
+        return $this->belongsTo(City::class, 'company_city_id', 'id');
     }
 
     // Objetivos principais selecionados no onboarding

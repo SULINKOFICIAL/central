@@ -17,7 +17,7 @@ class AuthenticatedSessionController extends Controller
      */
     public function create(): View
     {
-         return $this->testLogin();
+        // return $this->testLogin();
         return view('auth.login');
     }
 

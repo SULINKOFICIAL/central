@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\Api\CheckOnboardingIdentityRequest;
 use App\Http\Requests\Api\FinalizeOnboardingRequest;
 use App\Http\Requests\Api\SaveOnboardingStepRequest;
+use App\Models\City;
+use App\Models\State;
 use App\Models\Tenant;
 use App\Models\TenantDomain;
 use App\Models\TenantProvisioning;
@@ -23,6 +25,35 @@ class ApisOnboardingController extends Controller
         private readonly CpanelProvisioningService $cpanelProvisioningService,
         private readonly TenantInitialTrialPlanService $tenantInitialTrialPlanService
     ) {}
+
+    /**
+     * Lista estados disponíveis para o formulário público de onboarding.
+     */
+    public function states(): JsonResponse
+    {
+        return response()->json([
+            'states' => State::where('status', 1)
+                ->orderBy('name')
+                ->get(['id', 'country_id', 'name', 'acronym', 'code', 'cuf']),
+        ]);
+    }
+
+    /**
+     * Lista cidades de um estado para o formulário público de onboarding.
+     */
+    public function cities(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'state_id' => ['required', 'integer', 'exists:states,id'],
+        ]);
+
+        return response()->json([
+            'cities' => City::where('state_id', $validated['state_id'])
+                ->where('status', 1)
+                ->orderBy('name')
+                ->get(['id', 'state_id', 'name', 'code_ibge']),
+        ]);
+    }
 
     /**
      * Verifica se já existe tenant para identidade informada no onboarding.
@@ -44,7 +75,13 @@ class ApisOnboardingController extends Controller
          * quando documento ainda não foi informado pelo cliente.
          */
         if ($hasEmail && !$hasDocument) {
-            $tenantByEmail = Tenant::where('email', mb_strtolower((string) $data['email']))->first();
+            $email = $data['email'];
+
+            if (!is_string($email)) {
+                $email = '';
+            }
+
+            $tenantByEmail = Tenant::where('email', mb_strtolower($email))->first();
             if (!$tenantByEmail) {
                 return response()->json([
                     'exists' => false,
@@ -295,12 +332,20 @@ class ApisOnboardingController extends Controller
         /**
          * O tipo de documento define qual coluna representa a identidade.
          */
-        $documentType = (string) ($data['document_type'] ?? '');
+        $documentType = $data['document_type'] ?? '';
+
+        if (!is_string($documentType)) {
+            $documentType = '';
+        }
 
         /**
          * CPF e CNPJ compartilham a mesma função, mas não a mesma coluna.
          */
-        $documentValue = $documentType === 'cpf' ? (string) ($data['cpf'] ?? '') : (string) ($data['cnpj'] ?? '');
+        $documentValue = $documentType === 'cpf' ? ($data['cpf'] ?? '') : ($data['cnpj'] ?? '');
+
+        if (!is_string($documentValue)) {
+            $documentValue = '';
+        }
 
         /**
          * A coluna segue diretamente o tipo validado no request.
@@ -333,7 +378,8 @@ class ApisOnboardingController extends Controller
             'cpf',
             'company_profile',
             'company_zip_code',
-            'company_city_state',
+            'company_state_id',
+            'company_city_id',
             'company_address',
             'company_neighborhood',
             'company_number',
@@ -360,12 +406,20 @@ class ApisOnboardingController extends Controller
         /**
          * Nome padrão evita falha quando o payload vier sem identificação textual.
          */
-        $name = (string) ($data['name'] ?? 'Cadastro em andamento');
+        $name = $data['name'] ?? 'Cadastro em andamento';
+
+        if (!is_string($name) || $name === '') {
+            $name = 'Cadastro em andamento';
+        }
 
         /**
          * Company usa name como fallback para manter regra de domínio consistente.
          */
-        $company = (string) ($data['company'] ?? $name ?: 'Cadastro em andamento');
+        $company = $data['company'] ?? $name;
+
+        if (!is_string($company) || $company === '') {
+            $company = $name;
+        }
 
         /**
          * Slug serve de base para domínio temporário de rascunho.
@@ -412,13 +466,17 @@ class ApisOnboardingController extends Controller
                 /**
                  * Comparação de email em lowercase evita falso-negativo.
                  */
-                $query->orWhere('email', mb_strtolower((string) $tenant->email));
+                $email = $tenant->email;
+
+                if (is_string($email)) {
+                    $query->orWhere('email', mb_strtolower($email));
+                }
             }
             if (!empty($tenant->cnpj)) {
-                $query->orWhere('cnpj', onlyNumbers((string) $tenant->cnpj));
+                $query->orWhere('cnpj', onlyNumbers($tenant->cnpj));
             }
             if (!empty($tenant->cpf)) {
-                $query->orWhere('cpf', onlyNumbers((string) $tenant->cpf));
+                $query->orWhere('cpf', onlyNumbers($tenant->cpf));
             }
         });
 

@@ -6,6 +6,7 @@ use App\Http\Controllers\TenantDomainController;
 use App\Http\Controllers\TenantDomainProcessingController;
 use App\Http\Controllers\TenantIntegrationController;
 use App\Http\Controllers\TenantInstallController;
+use App\Http\Controllers\TenantLocationController;
 use App\Http\Controllers\TenantsActionsController;
 use App\Http\Controllers\CpanelController;
 use App\Http\Controllers\DeveloperController;
@@ -30,7 +31,12 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PagarMeController;
 use App\Http\Controllers\PagHiperController;
 use App\Http\Controllers\SubscriptionsController;
-use App\Http\Controllers\SystemSettingsController;
+use App\Http\Controllers\SystemCoreUpdateController;
+use App\Http\Controllers\SystemMailSettingsController;
+use App\Http\Controllers\SystemProvisioningController;
+use App\Http\Controllers\SystemQueuesController;
+use App\Http\Controllers\SystemSubscriptionsSyncController;
+use App\Http\Controllers\SystemWhatsAppSettingsController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\TaskDispatchHistoryController;
 use App\Http\Controllers\TaskDispatchHistoryProcessingController;
@@ -51,7 +57,9 @@ use App\Http\Controllers\TicketProcessingController;
 use App\Http\Controllers\TikTokApiController;
 use App\Http\Controllers\UserProcessingController;
 
-// Paínel de administração
+/**
+ * Paínel de administração.
+ */
 Route::middleware(['auth'])->group(function () {
 
     Route::get('/', [DashboardController::class, 'index'])->name('index');
@@ -80,47 +88,50 @@ Route::middleware(['auth'])->group(function () {
          * Rotas para configuração e teste de SMTP.
          */
         Route::prefix('sistema/smtp')->name('mail.')->group(function () {
-            Route::get('/',              [SystemSettingsController::class, 'editMail'])->name('edit');
-            Route::put('/',              [SystemSettingsController::class, 'updateMail'])->name('update');
-            Route::post('/testar-email', [SystemSettingsController::class, 'sendTest'])->name('test');
-            Route::get('/preview-email', [SystemSettingsController::class, 'preview'])->name('preview');
+            Route::get('/',              [SystemMailSettingsController::class, 'edit'])->name('edit');
+            Route::put('/',              [SystemMailSettingsController::class, 'update'])->name('update');
+            Route::post('/testar-email', [SystemMailSettingsController::class, 'sendTest'])->name('test');
+            Route::get('/preview-email', [SystemMailSettingsController::class, 'preview'])->name('preview');
         });
 
         /**
          * Rotas para configuração e teste de WhatsApp.
          */
         Route::prefix('sistema/whatsapp')->name('whatsapp.')->group(function () {
-            Route::get('/',         [SystemSettingsController::class, 'editWhatsApp'])->name('edit');
-            Route::put('/',         [SystemSettingsController::class, 'updateWhatsApp'])->name('update');
-            Route::post('/testar',  [SystemSettingsController::class, 'sendWhatsAppTest'])->name('test');
+            Route::get('/',         [SystemWhatsAppSettingsController::class, 'edit'])->name('edit');
+            Route::put('/',         [SystemWhatsAppSettingsController::class, 'update'])->name('update');
+            Route::post('/testar',  [SystemWhatsAppSettingsController::class, 'sendTest'])->name('test');
         });
 
         /**
          * Rotas para sincronização em massa de planos.
          */
         Route::prefix('sistema/assinaturas')->name('subscriptions.sync.')->group(function () {
-            Route::get('/',             [SystemSettingsController::class, 'editSubscriptionsSync'])->name('edit');
-            Route::post('/sincronizar', [SystemSettingsController::class, 'syncSubscriptionsInBulk'])->name('run');
+            Route::get('/',             [SystemSubscriptionsSyncController::class, 'edit'])->name('edit');
+            Route::post('/sincronizar', [SystemSubscriptionsSyncController::class, 'sync'])->name('run');
         });
 
         /**
          * Rotas para diagnóstico do provisionamento de tenants.
          */
         Route::prefix('sistema/provisionamento')->name('provisioning.')->group(function () {
-            Route::get('/integridade',       [SystemSettingsController::class, 'provisioningIntegrity'])->name('integrity');
-            Route::get('/consultar-dominio', [SystemSettingsController::class, 'cpanelDomainLookup'])->name('domain.lookup');
+            Route::get('/integridade',       [SystemProvisioningController::class, 'integrity'])->name('integrity');
+            Route::get('/consultar-dominio', [SystemProvisioningController::class, 'domainLookup'])->name('domain.lookup');
+            Route::get('/recursos-orfaos',   [SystemProvisioningController::class, 'orphanResources'])->name('orphans');
+            Route::post('/recursos-orfaos/remover', [SystemProvisioningController::class, 'removeOrphanResource'])->name('orphans.remove');
+            Route::post('/recursos-orfaos/remover-lote', [SystemProvisioningController::class, 'removeOrphanResourcesBatch'])->name('orphans.remove-batch');
         });
 
         /**
          * Rotas para consultar e reiniciar as filas da própria Central.
          */
-        Route::get('/sistema/filas-central', [SystemSettingsController::class, 'centralQueues'])->name('central.queues');
-        Route::post('/sistema/filas-central/reiniciar', [SystemSettingsController::class, 'restartCentralQueues'])->name('central.queues.restart');
+        Route::get('/sistema/filas-central', [SystemQueuesController::class, 'index'])->name('central.queues');
+        Route::post('/sistema/filas-central/reiniciar', [SystemQueuesController::class, 'restart'])->name('central.queues.restart');
 
         /**
          * Rota para atualizar a própria central core_business.
          */
-        Route::get('/sistema/central/atualizar', [SystemSettingsController::class, 'updateCoreBusiness'])->name('core.update');
+        Route::get('/sistema/central/atualizar', [SystemCoreUpdateController::class, 'run'])->name('core.update');
     });
 
     /**
@@ -132,6 +143,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/processar',                             [TenantProcessingController::class, 'process'])->name('process');
             Route::get('/adicionar',                             [TenantController::class, 'create'])->name('create');
             Route::get('/consultar-dominio',                     [TenantController::class, 'domainAvailability'])->name('domain.availability');
+            Route::get('/cidades',                               [TenantLocationController::class, 'cities'])->name('locations.cities');
             Route::post('/adicionar',                            [TenantController::class, 'store'])->name('store');
             Route::get('/visualizar/{id}',                       [TenantController::class, 'show'])->name('show');
             Route::get('/visualizar/dados-api/{id}',             [TenantController::class, 'apiData'])->name('api.data');

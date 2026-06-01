@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\City;
 use App\Models\Tenant;
 use App\Models\TenantProvisioning;
 use Exception;
@@ -379,15 +380,59 @@ class CpanelProvisioningService
             throw new RuntimeException("Email da conta não informado para o cliente {$tenant->id}.");
         }
 
+        if (empty($tenant->company_address)) {
+            throw new RuntimeException("Endereço da conta não informado para o cliente {$tenant->id}.");
+        }
+
+        if (empty($tenant->company_number)) {
+            throw new RuntimeException("Número do endereço não informado para o cliente {$tenant->id}.");
+        }
+
+        if (empty($tenant->company_neighborhood)) {
+            throw new RuntimeException("Bairro da conta não informado para o cliente {$tenant->id}.");
+        }
+
+        if (empty($tenant->company_zip_code)) {
+            throw new RuntimeException("CEP da conta não informado para o cliente {$tenant->id}.");
+        }
+
+        if (empty($tenant->company_state_id)) {
+            throw new RuntimeException("Estado da conta não informado para o cliente {$tenant->id}.");
+        }
+
+        if (empty($tenant->company_city_id)) {
+            throw new RuntimeException("Cidade da conta não informada para o cliente {$tenant->id}.");
+        }
+
+        if (!City::where('id', $tenant->company_city_id)->where('state_id', $tenant->company_state_id)->exists()) {
+            throw new RuntimeException("Cidade inválida para o estado informado no cliente {$tenant->id}.");
+        }
+
         $document = onlyNumbers($document);
+        $phone = onlyNumbers($tenant->whatsapp);
+        $zipCode = onlyNumbers($tenant->company_zip_code);
 
         if (empty($document)) {
             throw new RuntimeException("Documento inválido para o cliente {$tenant->id}.");
         }
 
+        if (empty($phone)) {
+            throw new RuntimeException("WhatsApp da conta não informado para o cliente {$tenant->id}.");
+        }
+
+        if (strlen($zipCode) !== 8) {
+            throw new RuntimeException("CEP inválido para o cliente {$tenant->id}.");
+        }
+
+        $site = $tenant->domains()->where('status', true)->value('domain');
+
+        if (empty($site)) {
+            throw new RuntimeException("Domínio ativo não informado para o cliente {$tenant->id}.");
+        }
+
         /**
-         * A Central ainda não resolve cidade/estado por id do tenant.
-         * Por isso gravamos o endereço textual e deixamos city/state neutros.
+         * Estado e cidade usam os mesmos IDs sincronizados do template MiCore.
+         * Isso evita gravar null em tenants cujo schema exige localização.
          */
         return [
             'public'        => 1,
@@ -399,14 +444,14 @@ class CpanelProvisioningService
             'number'        => $tenant->company_number,
             'complement'    => $tenant->company_complement,
             'neighborhood'  => $tenant->company_neighborhood,
-            'zip'           => $tenant->company_zip_code,
+            'zip'           => $zipCode,
             'email'         => $tenant->email,
-            'site'          => $tenant->domains()->where('status', true)->value('domain'),
-            'phone1'        => $tenant->whatsapp,
+            'site'          => $site,
+            'phone1'        => $phone,
             'status'        => 1,
             'country_id'    => 26,
-            'state_id'      => null,
-            'city_id'       => null,
+            'state_id'      => $tenant->company_state_id,
+            'city_id'       => $tenant->company_city_id,
             'created_by'    => 1,
         ];
     }

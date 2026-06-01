@@ -43,10 +43,15 @@ class SaveOnboardingStepRequest extends FormRequest
      */
     public function rules(): array
     {
-        $step = (string) $this->input('step');
+        $step = $this->input('step');
+
+        if (!is_string($step)) {
+            $step = '';
+        }
 
         return [
             'step'                  => ['required', 'in:account,company,goal,address'],
+            'company_city_state'    => ['prohibited'],
             'email'                 => ['nullable', 'email', 'max:255'],
             'document_type'         => ['required', 'in:cnpj,cpf'],
             'cpf'                   => ['nullable', 'string', 'size:11', 'required_if:document_type,cpf'],
@@ -58,12 +63,18 @@ class SaveOnboardingStepRequest extends FormRequest
             'tips_whatsapp'         => ['nullable', 'boolean'],
             'tips_email'            => ['nullable', 'boolean'],
             'has_coupon'            => ['nullable', 'boolean'],
-            'coupon_code'           => [Rule::requiredIf((bool) $this->input('has_coupon')), 'nullable', 'string', 'max:255'],
+            'coupon_code'           => [Rule::requiredIf($this->boolean('has_coupon')), 'nullable', 'string', 'max:255'],
             'company_profile'       => [Rule::requiredIf($step === 'company'), 'nullable', Rule::in(self::COMPANY_PROFILES)],
             'main_goals'            => [Rule::requiredIf($step === 'goal'), 'nullable', 'array', 'min:1'],
             'main_goals.*'          => ['string', Rule::in(self::MAIN_GOALS)],
             'company_zip_code'      => [Rule::requiredIf($step === 'address'), 'nullable', 'string', 'size:8'],
-            'company_city_state'    => [Rule::requiredIf($step === 'address'), 'nullable', 'string', 'max:255'],
+            'company_state_id'      => [Rule::requiredIf($step === 'address'), 'nullable', 'integer', 'exists:states,id'],
+            'company_city_id'       => [
+                Rule::requiredIf($step === 'address'),
+                'nullable',
+                'integer',
+                Rule::exists('cities', 'id')->where('state_id', $this->input('company_state_id')),
+            ],
             'company_address'       => [Rule::requiredIf($step === 'address'), 'nullable', 'string', 'max:255'],
             'company_neighborhood'  => [Rule::requiredIf($step === 'address'), 'nullable', 'string', 'max:255'],
             'company_number'        => [Rule::requiredIf($step === 'address'), 'nullable', 'string', 'max:50'],
@@ -81,8 +92,8 @@ class SaveOnboardingStepRequest extends FormRequest
         $mainGoals = $this->input('main_goals');
 
         $this->merge([
-            'email'             => is_string($email) ? mb_strtolower(trim($email)) : $email,
-            'document_type'     => is_string($this->input('document_type')) ? trim((string) $this->input('document_type')) : $this->input('document_type'),
+            'email'             => is_string($email) ? mb_strtolower($email) : $email,
+            'document_type'     => $this->input('document_type'),
             'whatsapp'          => is_string($whatsapp) ? onlyNumbers($whatsapp) : $whatsapp,
             'cpf'               => is_string($cpf) ? onlyNumbers($cpf) : $cpf,
             'cnpj'              => is_string($cnpj) ? onlyNumbers($cnpj) : $cnpj,

@@ -34,6 +34,7 @@ class FinalizeOnboardingRequest extends FormRequest
     {
         return [
             'step'                  => ['nullable', 'in:account,company,goal,address'],
+            'company_city_state'    => ['prohibited'],
             'email'                 => ['nullable', 'email', 'max:255'],
             'document_type'         => ['required', 'in:cnpj,cpf'],
             'cpf'                   => ['nullable', 'string', 'size:11', 'required_if:document_type,cpf'],
@@ -45,11 +46,16 @@ class FinalizeOnboardingRequest extends FormRequest
             'main_goals'            => ['nullable', 'array'],
             'main_goals.*'          => ['string', Rule::in(self::MAIN_GOALS)],
             'company_profile'       => ['nullable', 'string', 'max:100'],
-            'company_zip_code'      => ['nullable', 'string', 'size:8'],
-            'company_city_state'    => ['nullable', 'string', 'max:255'],
-            'company_address'       => ['nullable', 'string', 'max:255'],
-            'company_neighborhood'  => ['nullable', 'string', 'max:255'],
-            'company_number'        => ['nullable', 'string', 'max:50'],
+            'company_zip_code'      => ['required', 'string', 'size:8'],
+            'company_state_id'      => ['required', 'integer', 'exists:states,id'],
+            'company_city_id'       => [
+                'required',
+                'integer',
+                Rule::exists('cities', 'id')->where('state_id', $this->input('company_state_id')),
+            ],
+            'company_address'       => ['required', 'string', 'max:255'],
+            'company_neighborhood'  => ['required', 'string', 'max:255'],
+            'company_number'        => ['required', 'string', 'max:50'],
             'company_complement'    => ['nullable', 'string', 'max:255'],
             'tips_whatsapp'         => ['nullable', 'boolean'],
             'tips_email'            => ['nullable', 'boolean'],
@@ -68,10 +74,8 @@ class FinalizeOnboardingRequest extends FormRequest
         $mainGoals = $this->input('main_goals');
 
         $this->merge([
-            'email'             => is_string($email) ? mb_strtolower(trim($email)) : $email,
-            'document_type'     => is_string($this->input('document_type'))
-                ? trim((string) $this->input('document_type'))
-                : $this->input('document_type'),
+            'email'             => is_string($email) ? mb_strtolower($email) : $email,
+            'document_type'     => $this->input('document_type'),
             'whatsapp'          => is_string($whatsapp) ? onlyNumbers($whatsapp) : $whatsapp,
             'cpf'               => is_string($cpf) ? onlyNumbers($cpf) : $cpf,
             'cnpj'              => is_string($cnpj) ? onlyNumbers($cnpj) : $cnpj,

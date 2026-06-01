@@ -10,6 +10,30 @@ beforeEach(function () {
     config(['app.debug' => false]);
     config(['app.env' => 'testing']);
     config(['CPANEL_PREFIX' => 'micorecom']);
+
+    DB::table('states')->insert([
+        'id' => 16,
+        'country_id' => 26,
+        'name' => 'Paraná',
+        'acronym' => 'PR',
+        'code' => 41,
+        'cuf' => 41,
+        'status' => 1,
+        'created_by' => 1,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    DB::table('cities')->insert([
+        'id' => 4179,
+        'state_id' => 16,
+        'name' => 'Curitiba',
+        'code_ibge' => 4106902,
+        'status' => 1,
+        'created_by' => 1,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
 });
 
 it('finalizes onboarding through api using tenant domains and provisioning steps', function () {
@@ -95,7 +119,8 @@ it('finalizes onboarding through api using tenant domains and provisioning steps
         'company_profile' => 'simples_nacional',
         'main_goals' => ['centralizar_atendimentos'],
         'company_zip_code' => '88000000',
-        'company_city_state' => 'Florianopolis/SC',
+        'company_state_id' => 16,
+        'company_city_id' => 4179,
         'company_address' => 'Rua Teste',
         'company_neighborhood' => 'Centro',
         'company_number' => '100',
@@ -117,6 +142,8 @@ it('finalizes onboarding through api using tenant domains and provisioning steps
     $tenant = Tenant::where('cnpj', '99000000000001')->firstOrFail();
 
     expect($tenant->onboarding_completed_at)->not->toBeNull();
+    expect($tenant->company_state_id)->toBe(16);
+    expect($tenant->company_city_id)->toBe(4179);
 
     $this->assertDatabaseHas('tenants_domains', [
         'tenant_id' => $tenant->id,
@@ -235,7 +262,8 @@ it('retries finalization without recalculating provisioned domain and database',
         'company_profile' => 'simples_nacional',
         'main_goals' => ['centralizar_atendimentos'],
         'company_zip_code' => '88000000',
-        'company_city_state' => 'Florianopolis/SC',
+        'company_state_id' => 16,
+        'company_city_id' => 4179,
         'company_address' => 'Rua Teste',
         'company_neighborhood' => 'Centro',
         'company_number' => '100',
@@ -302,4 +330,31 @@ it('retries finalization without recalculating provisioned domain and database',
         'tenant_id' => $tenant->id,
         'table' => 'micorecom_teste_api_retry_alterado',
     ]);
+});
+
+it('rejects onboarding address payload without state and city ids', function () {
+    $payload = [
+        'step' => 'address',
+        'email' => 'teste.api.sem.localidade@micore.com.br',
+        'document_type' => 'cnpj',
+        'cnpj' => '99000000000004',
+        'name' => 'Teste API Sem Localidade',
+        'company' => 'Teste API Sem Localidade',
+        'whatsapp' => '48999999999',
+        'password' => 'TesteApi123',
+        'company_profile' => 'simples_nacional',
+        'main_goals' => ['centralizar_atendimentos'],
+        'company_zip_code' => '88000000',
+        'company_address' => 'Rua Teste',
+        'company_neighborhood' => 'Centro',
+        'company_number' => '100',
+        'tips_whatsapp' => false,
+        'tips_email' => false,
+        'has_coupon' => false,
+    ];
+
+    $this->withToken('central-test-token')
+        ->postJson('/api/central/onboarding/finalizar', $payload)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['company_state_id', 'company_city_id']);
 });
