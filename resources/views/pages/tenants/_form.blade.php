@@ -94,31 +94,31 @@
                     <i class="fa-solid fa-location-dot text-primary fs-3"></i>
                     <div>
                         <span class="fw-bolder text-gray-800 fs-5 d-block">Endereço</span>
-                        <span class="text-gray-600 fs-7">Dados opcionais usados para completar o cadastro do cliente</span>
+                        <span class="text-gray-600 fs-7">Dados usados para criar a loja inicial do cliente</span>
                     </div>
                 </div>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-12 col-md-3 mb-4">
-                        <label class="form-label fs-6 fw-bold text-gray-700 mb-2">CEP</label>
-                        <input type="text" class="form-control form-control-solid" placeholder="88000000" name="company_zip_code" value="{{ old('company_zip_code') }}" inputmode="numeric" pattern="[0-9]*" maxlength="8">
+                        <label class="form-label fs-6 fw-bold text-gray-700 mb-2 required">CEP</label>
+                        <input type="text" class="form-control form-control-solid" placeholder="88000000" name="company_zip_code" value="{{ old('company_zip_code') }}" inputmode="numeric" pattern="[0-9]*" maxlength="8" required>
                     </div>
                     <div class="col-12 col-md-5 mb-4">
-                        <label class="form-label fs-6 fw-bold text-gray-700 mb-2">Cidade/UF</label>
-                        <input type="text" class="form-control form-control-solid" placeholder="Florianopolis/SC" name="company_city_state" value="{{ old('company_city_state') }}" maxlength="255">
+                        <label class="form-label fs-6 fw-bold text-gray-700 mb-2 required">Cidade/UF</label>
+                        <input type="text" class="form-control form-control-solid" placeholder="Florianopolis/SC" name="company_city_state" value="{{ old('company_city_state') }}" maxlength="255" required>
                     </div>
                     <div class="col-12 col-md-4 mb-4">
-                        <label class="form-label fs-6 fw-bold text-gray-700 mb-2">Bairro</label>
-                        <input type="text" class="form-control form-control-solid" placeholder="Centro" name="company_neighborhood" value="{{ old('company_neighborhood') }}" maxlength="255">
+                        <label class="form-label fs-6 fw-bold text-gray-700 mb-2 required">Bairro</label>
+                        <input type="text" class="form-control form-control-solid" placeholder="Centro" name="company_neighborhood" value="{{ old('company_neighborhood') }}" maxlength="255" required>
                     </div>
                     <div class="col-12 col-md-7 mb-4">
-                        <label class="form-label fs-6 fw-bold text-gray-700 mb-2">Endereço</label>
-                        <input type="text" class="form-control form-control-solid" placeholder="Rua, avenida ou travessa" name="company_address" value="{{ old('company_address') }}" maxlength="255">
+                        <label class="form-label fs-6 fw-bold text-gray-700 mb-2 required">Endereço</label>
+                        <input type="text" class="form-control form-control-solid" placeholder="Rua, avenida ou travessa" name="company_address" value="{{ old('company_address') }}" maxlength="255" required>
                     </div>
                     <div class="col-12 col-md-2 mb-4">
-                        <label class="form-label fs-6 fw-bold text-gray-700 mb-2">Número</label>
-                        <input type="text" class="form-control form-control-solid" placeholder="100" name="company_number" value="{{ old('company_number') }}" maxlength="20">
+                        <label class="form-label fs-6 fw-bold text-gray-700 mb-2 required">Número</label>
+                        <input type="text" class="form-control form-control-solid" placeholder="100" name="company_number" value="{{ old('company_number') }}" maxlength="20" required>
                     </div>
                     <div class="col-12 col-md-3 mb-4">
                         <label class="form-label fs-6 fw-bold text-gray-700 mb-2">Complemento</label>

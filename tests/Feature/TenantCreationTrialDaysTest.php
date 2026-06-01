@@ -25,6 +25,12 @@ it('allows choosing the initial trial days when creating a tenant in central', f
             'domain' => 'cliente-trial-customizado',
             'document_type' => 'cnpj',
             'document_number' => '99000000000003',
+            'company_zip_code' => '88000000',
+            'company_city_state' => 'Florianopolis/SC',
+            'company_neighborhood' => 'Centro',
+            'company_address' => 'Rua Trial',
+            'company_number' => '100',
+            'company_complement' => 'Sala 1',
             'trial_days' => 45,
             'user' => [
                 'name' => 'Cliente Trial',
@@ -39,6 +45,7 @@ it('allows choosing the initial trial days when creating a tenant in central', f
     expect($tenant->company)->toBe('Cliente Trial Customizado LTDA');
     expect($tenant->email)->toBe('conta.trial@micore.com.br');
     expect($tenant->cnpj)->toBe('99000000000003');
+    expect($tenant->company_zip_code)->toBe('88000000');
 
     $this->assertDatabaseHas('tenants_plans', [
         'tenant_id' => $tenant->id,

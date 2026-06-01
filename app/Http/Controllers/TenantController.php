@@ -127,25 +127,39 @@ class TenantController extends Controller
          * a loja inicial no banco isolado do cliente.
          */
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'company' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255'],
-            'domain' => ['required', 'string', 'max:255'],
-            'document_type' => ['required', 'in:cnpj,cpf'],
-            'document_number' => ['required', 'string', 'max:20'],
-            'trial_days' => ['nullable', 'integer', 'min:1', 'max:365'],
-            'user.name' => ['required', 'string', 'max:255'],
-            'user.email' => ['required', 'email', 'max:255'],
-            'user.password' => ['required', 'string', 'max:255'],
+            'name'                       => ['required', 'string', 'max:255'],
+            'company'                    => ['required', 'string', 'max:255'],
+            'email'                      => ['required', 'email', 'max:255'],
+            'domain'                     => ['required', 'string', 'max:255'],
+            'document_type'              => ['required', 'in:cnpj,cpf'],
+            'document_number'            => ['required', 'string', 'max:20'],
+            'company_zip_code'           => ['required', 'string', 'size:8'],
+            'company_city_state'         => ['required', 'string', 'max:255'],
+            'company_neighborhood'       => ['required', 'string', 'max:255'],
+            'company_address'            => ['required', 'string', 'max:255'],
+            'company_number'             => ['required', 'string', 'max:20'],
+            'company_complement'         => ['nullable', 'string', 'max:255'],
+            'trial_days'                 => ['nullable', 'integer', 'min:1', 'max:365'],
+            'user.name'                  => ['required', 'string', 'max:255'],
+            'user.email'                 => ['required', 'email', 'max:255'],
+            'user.password'              => ['required', 'string', 'max:255'],
         ]);
 
         $trialDays = $validated['trial_days'] ?? TenantInitialTrialPlanService::DEFAULT_TRIAL_DAYS;
         $documentNumber = onlyNumbers($validated['document_number']);
+        $zipCode = onlyNumbers($validated['company_zip_code']);
 
         if (empty($documentNumber)) {
             return redirect()
                 ->back()
                 ->withErrors(['document_number' => 'Informe um documento válido.'])
+                ->withInput();
+        }
+
+        if (strlen($zipCode) !== 8) {
+            return redirect()
+                ->back()
+                ->withErrors(['company_zip_code' => 'CEP deve conter 8 dígitos.'])
                 ->withInput();
         }
 
@@ -183,6 +197,7 @@ class TenantController extends Controller
 
         // Obtém dados
         $data = $request->all();
+        $data['company_zip_code'] = $zipCode;
         $data['cnpj'] = null;
         $data['cpf'] = null;
 
