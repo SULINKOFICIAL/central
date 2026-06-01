@@ -10,15 +10,21 @@ use Illuminate\Support\Str;
 
 class TenantInitialTrialPlanService
 {
-    private const PLAN_NAME = 'Teste 30 dias';
+    public const DEFAULT_TRIAL_DAYS = 30;
+
     private const STORAGE_BYTES = 5 * 1024 * 1024 * 1024;
 
     /**
      * Cria o plano inicial de teste para novas contas sem gerar histórico financeiro.
-     * O teste libera todos os módulos ativos, 5GB de armazenamento e nenhum usuário adicional.
+     * O teste libera todos os módulos ativos, 5GB de armazenamento e nenhum usuário adicional
+     * pelo período definido na criação do cliente.
      */
-    public function ensureForTenant(Tenant $tenant): void
+    public function ensureForTenant(Tenant $tenant, int $trialDays = self::DEFAULT_TRIAL_DAYS): void
     {
+        if ($trialDays < 1) {
+            $trialDays = self::DEFAULT_TRIAL_DAYS;
+        }
+
         $tenant->unsetRelation('plan');
         $tenant->loadMissing('plan');
 
@@ -28,10 +34,11 @@ class TenantInitialTrialPlanService
 
         $plan = TenantPlan::create([
             'tenant_id' => $tenant->id,
-            'name' => self::PLAN_NAME,
+            'name' => $this->planName($trialDays),
             'value' => 0,
             'users_limit' => 0,
             'size_storage' => self::STORAGE_BYTES,
+            'trial_days' => $trialDays,
             'progress' => 'completed',
             'status' => true,
             'tenant_sync_status' => 'pending',
@@ -57,12 +64,20 @@ class TenantInitialTrialPlanService
                 'applied_price' => 0,
                 'discount_amount' => $basePrice,
                 'discount_percent' => $discountPercent,
-                'pricing_source' => 'trial_30_days',
+                'pricing_source' => 'initial_trial',
                 'billing_type' => $module->pricing_type,
                 'payload' => $module->toJson(),
             ]);
         }
 
         $tenant->unsetRelation('plan');
+    }
+
+    /**
+     * Mantém o nome administrativo alinhado ao período liberado no plano.
+     */
+    private function planName(int $trialDays): string
+    {
+        return 'Teste ' . $trialDays . ' dias';
     }
 }

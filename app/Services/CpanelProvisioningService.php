@@ -338,33 +338,17 @@ class CpanelProvisioningService
                 ]
             );
 
+        $storePayload = $this->buildTenantStorePayload($tenant);
+
         /**
-         * A loja Matriz é bootstrap operacional do tenant.
-         * O CNPJ fictício é usado como chave estável nesse seed inicial.
+         * A loja inicial é o bootstrap operacional do tenant.
+         * O documento do cadastro central vira a chave estável no banco do tenant.
          */
         DB::connection('mysql_cliente')
             ->table('stores')
             ->updateOrInsert(
-                ['cnpj' => '00000000000000'],
-                [
-                    'public' => 1,
-                    'company' => 'Matriz',
-                    'abbreviation' => 'MT',
-                    'cnpj' => '00000000000000',
-                    'name_fantasy' => 'Matrix',
-                    'address' => 'Rua Teste',
-                    'number' => '123',
-                    'neighborhood' => 'Teste',
-                    'zip' => '00000000',
-                    'email' => 'matrix@micore.com.br',
-                    'site' => 'matrix.com.br',
-                    'phone1' => '123456789',
-                    'status' => 1,
-                    'country_id' => 26,
-                    'state_id' => 1,
-                    'city_id' => 1,
-                    'created_by' => 1,
-                ]
+                ['cnpj' => $storePayload['cnpj']],
+                $storePayload
             );
 
         $sizeStorage = $tenant->plan?->size_storage ?? 0;
@@ -376,6 +360,55 @@ class CpanelProvisioningService
         $this->updateCentralConfig('tenant', $tenant->id);
         $this->updateCentralConfig('token', $tenant->token);
         $this->updateCentralConfig('s3StorageAllow', $sizeStorage);
+    }
+
+    private function buildTenantStorePayload(Tenant $tenant): array
+    {
+        $company = $tenant->company;
+        $document = $tenant->cnpj ?: $tenant->cpf;
+
+        if (empty($company)) {
+            throw new RuntimeException("Razão social não informada para o cliente {$tenant->id}.");
+        }
+
+        if (empty($document)) {
+            throw new RuntimeException("Documento não informado para o cliente {$tenant->id}.");
+        }
+
+        if (empty($tenant->email)) {
+            throw new RuntimeException("Email da conta não informado para o cliente {$tenant->id}.");
+        }
+
+        $document = onlyNumbers($document);
+
+        if (empty($document)) {
+            throw new RuntimeException("Documento inválido para o cliente {$tenant->id}.");
+        }
+
+        /**
+         * A Central ainda não resolve cidade/estado por id do tenant.
+         * Por isso gravamos o endereço textual e deixamos city/state neutros.
+         */
+        return [
+            'public'        => 1,
+            'company'       => $company,
+            'abbreviation'  => generateShortName($company),
+            'cnpj'          => $document,
+            'name_fantasy'  => $company,
+            'address'       => $tenant->company_address,
+            'number'        => $tenant->company_number,
+            'complement'    => $tenant->company_complement,
+            'neighborhood'  => $tenant->company_neighborhood,
+            'zip'           => $tenant->company_zip_code,
+            'email'         => $tenant->email,
+            'site'          => $tenant->domains()->where('status', true)->value('domain'),
+            'phone1'        => $tenant->whatsapp,
+            'status'        => 1,
+            'country_id'    => 26,
+            'state_id'      => null,
+            'city_id'       => null,
+            'created_by'    => 1,
+        ];
     }
 
     private function updateCentralConfig(string $optionName, mixed $optionValue): void
@@ -397,9 +430,12 @@ class CpanelProvisioningService
 
     private function configureModulesForTenant(Tenant $tenant): array
     {
+        $trialDays = $tenant->plan?->trial_days ?? TenantInitialTrialPlanService::DEFAULT_TRIAL_DAYS;
+
         /**
          * Na finalização do provisionamento, aplica no tenant remoto
          * o pacote consolidado inicial de módulos, vigência e limites.
+         * A vigência usa o período escolhido na Central ao criar a conta.
          */
         return $this->syncService->syncFromCurrentPlan(
             $tenant,
@@ -407,7 +443,7 @@ class CpanelProvisioningService
             operatorId: null,
             reason: 'Provisionamento inicial do tenant',
             startDate: now()->toDateString(),
-            endDate: now()->addDays(30)->toDateString(),
+            endDate: now()->addDays($trialDays)->toDateString(),
         );
     }
 

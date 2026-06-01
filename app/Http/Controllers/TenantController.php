@@ -59,9 +59,77 @@ class TenantController extends Controller
      */
     public function store(Request $request)
     {
+        /**
+         * Dados mínimos para criar o tenant e depois materializar
+         * a loja inicial no banco isolado do cliente.
+         */
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'company' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255'],
+            'domain' => ['required', 'string', 'max:255'],
+            'document_type' => ['required', 'in:cnpj,cpf'],
+            'document_number' => ['required', 'string', 'max:20'],
+            'trial_days' => ['nullable', 'integer', 'min:1', 'max:365'],
+            'user.name' => ['required', 'string', 'max:255'],
+            'user.email' => ['required', 'email', 'max:255'],
+            'user.password' => ['required', 'string', 'max:255'],
+        ]);
+
+        $trialDays = $validated['trial_days'] ?? TenantInitialTrialPlanService::DEFAULT_TRIAL_DAYS;
+        $documentNumber = onlyNumbers($validated['document_number']);
+
+        if (empty($documentNumber)) {
+            return redirect()
+                ->back()
+                ->withErrors(['document_number' => 'Informe um documento válido.'])
+                ->withInput();
+        }
+
+        /**
+         * A loja inicial do tenant usa esse documento como chave.
+         * Por isso bloqueamos CPF/CNPJ incompletos antes do provisionamento.
+         */
+        if ($validated['document_type'] === 'cpf' && strlen($documentNumber) !== 11) {
+            return redirect()
+                ->back()
+                ->withErrors(['document_number' => 'CPF deve conter 11 dígitos.'])
+                ->withInput();
+        }
+
+        if ($validated['document_type'] === 'cnpj' && strlen($documentNumber) !== 14) {
+            return redirect()
+                ->back()
+                ->withErrors(['document_number' => 'CNPJ deve conter 14 dígitos.'])
+                ->withInput();
+        }
+
+        if (Tenant::where('email', $validated['email'])->exists()) {
+            return redirect()
+                ->back()
+                ->withErrors(['email' => 'Já existe uma conta com este email.'])
+                ->withInput();
+        }
+
+        if (Tenant::where($validated['document_type'], $documentNumber)->exists()) {
+            return redirect()
+                ->back()
+                ->withErrors(['document_number' => 'Já existe uma conta com este documento.'])
+                ->withInput();
+        }
 
         // Obtém dados
         $data = $request->all();
+        $data['cnpj'] = null;
+        $data['cpf'] = null;
+
+        if ($validated['document_type'] === 'cnpj') {
+            $data['cnpj'] = $documentNumber;
+        }
+
+        if ($validated['document_type'] === 'cpf') {
+            $data['cpf'] = $documentNumber;
+        }
 
         // Autor
         $data['created_by'] = 1;
@@ -100,7 +168,7 @@ class TenantController extends Controller
             'install' => TenantProvisioning::STEP_SUBDOMAIN,
         ];
 
-        unset($data['table'], $data['table_user'], $data['table_password'], $data['first_user'], $data['user']);
+        unset($data['table'], $data['table_user'], $data['table_password'], $data['first_user'], $data['user'], $data['trial_days'], $data['document_number']);
 
         /**
          * Insere o tenant e seus dados técnicos iniciais.
@@ -112,7 +180,7 @@ class TenantController extends Controller
         /**
          * Novas contas começam com teste operacional sem histórico financeiro.
          */
-        $this->tenantInitialTrialPlanService->ensureForTenant($created);
+        $this->tenantInitialTrialPlanService->ensureForTenant($created, $trialDays);
 
         /**
          * Registra o domínio do cliente.

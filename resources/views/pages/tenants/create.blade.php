@@ -8,11 +8,7 @@
 </p>
 <form action="{{ route('tenants.store') }}" method="POST" enctype="multipart/form-data">
     @csrf
-    <div class="card">
-        <div class="card-body">
-                @include('pages.tenants._form')
-        </div>
-    </div>
+    @include('pages.tenants._form')
     <div class="d-flex justify-content-end mt-4">
         <a href="{{ route('tenants.index') }}" class="btn btn-light text-muted me-2">
             Voltar

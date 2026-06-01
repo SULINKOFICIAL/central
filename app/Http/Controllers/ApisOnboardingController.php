@@ -14,6 +14,7 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Throwable;
 
 class ApisOnboardingController extends Controller
 {
@@ -29,13 +30,19 @@ class ApisOnboardingController extends Controller
      */
     public function checkOnboardingIdentity(CheckOnboardingIdentityRequest $request): JsonResponse
     {
-        // O FormRequest já entrega os dados normalizados e validados.
+        /**
+         * O FormRequest centraliza normalização e validação para a action
+         * trabalhar apenas com dados dentro do contrato público da API.
+         */
         $data = $request->validated();
 
         $hasEmail = !empty($data['email']);
         $hasDocument = !empty($data['document_type']);
 
-        // Consulta de e-mail é usada apenas para bloquear avanço quando já existe cadastro.
+        /**
+         * Consulta isolada por e-mail cobre o primeiro passo do onboarding,
+         * quando documento ainda não foi informado pelo cliente.
+         */
         if ($hasEmail && !$hasDocument) {
             $tenantByEmail = Tenant::where('email', mb_strtolower((string) $data['email']))->first();
             if (!$tenantByEmail) {
@@ -55,11 +62,16 @@ class ApisOnboardingController extends Controller
             ]);
         }
 
-        // Para documento, a consulta segue o tipo informado no formulário (cpf/cnpj).
+        /**
+         * Quando há documento, a identidade passa a ser CPF ou CNPJ.
+         * Isso evita misturar chaves de pessoa física e jurídica.
+         */
         $tenant = $this->findTenantByIdentity($data);
 
         if (!$tenant) {
-            // Quando não existe identidade na base, o onboarding pode iniciar normalmente.
+            /**
+             * Identidade inexistente libera o início do cadastro.
+             */
             return response()->json([
                 'exists' => false,
                 'is_completed' => false,
@@ -67,10 +79,15 @@ class ApisOnboardingController extends Controller
             ]);
         }
 
-        // O status finalizado é inferido pelo timestamp de conclusão do onboarding.
+        /**
+         * O timestamp de conclusão é a fonte de verdade para diferenciar
+         * rascunho retomável de conta já provisionada.
+         */
         $isCompleted = !empty($tenant->onboarding_completed_at);
 
-        // Se já concluiu, bloqueia continuidade; se está em rascunho, permite prosseguir.
+        /**
+         * Conta concluída bloqueia avanço; rascunho mantém continuidade.
+         */
         return response()->json([
             'exists' => true,
             'is_completed' => $isCompleted,
@@ -84,49 +101,73 @@ class ApisOnboardingController extends Controller
      */
     public function saveOnboardingStep(SaveOnboardingStepRequest $request): JsonResponse
     {
-        // Payload já chega com tipos e formatos consistentes por etapa.
+        /**
+         * Payload validado evita persistir campos fora da etapa atual.
+         */
         $data = $request->validated();
 
-        // A etapa atual é usada para controle de progresso no tenant.
+        /**
+         * A etapa atual é persistida para o frontend poder retomar o fluxo.
+         */
         $step = $data['step'];
 
-        // O tenant sempre é resolvido por identidade (email/cnpj/cpf).
+        /**
+         * A identidade resolve rascunhos existentes e impede duplicar
+         * uma mesma pessoa/empresa durante o onboarding.
+         */
         $tenant = $this->findTenantByIdentity($data);
 
         if ($tenant && !empty($tenant->onboarding_completed_at)) {
-            // Protege contra sobrescrita de cadastro que já finalizou provisionamento.
+            /**
+             * Cadastros finalizados não podem ser sobrescritos por salvamento incremental.
+             */
             return response()->json([
                 'message' => 'Cadastro já finalizado para este tenant.',
             ], 409);
         }
 
-        // Apenas campos oficiais do onboarding podem atualizar o tenant.
+        /**
+         * Apenas campos oficiais do onboarding podem atualizar o tenant.
+         */
         $updatableData = $this->extractOnboardingUpdatableData($data);
 
-        // Persistimos também em qual etapa o usuário parou.
+        /**
+         * Guarda o ponto exato onde o cliente parou.
+         */
         $updatableData['onboarding_current_step'] = $step;
 
         if ($tenant) {
-            // Garante data de início somente no primeiro salvamento incremental.
+            /**
+             * Garante data de início somente no primeiro salvamento incremental.
+             */
             if (empty($tenant->onboarding_started_at)) {
                 $updatableData['onboarding_started_at'] = now();
             }
 
-            // Atualização incremental da etapa atual.
+            /**
+             * Atualiza rascunho existente sem tocar em provisionamento.
+             */
             $tenant->update($updatableData);
         } else {
-            // Criação de rascunho: permite retomada sem provisionar infraestrutura.
+            /**
+             * Cria rascunho retomável sem provisionar infraestrutura.
+             */
             $tenant = $this->tenantRepository->create(array_merge($this->buildDraftTenantDefaults($data), $updatableData, [
                 'onboarding_started_at' => now(),
             ]));
         }
 
-        // Objetivos são relacionais; salvamos no step para manter progresso persistido.
+        /**
+         * Objetivos são relacionais; salvar no step evita perder seleção
+         * antes da finalização do cadastro.
+         */
         if ($step === 'goal' && array_key_exists('main_goals', $data)) {
             $this->replaceTenantMainGoals($tenant, $data['main_goals'] ?? []);
         }
 
-        // Retorna identificador para o frontend manter continuidade do fluxo.
+        /**
+         * O tenant_id permite o frontend seguir no mesmo rascunho.
+         */
         return response()->json([
             'tenant_id' => $tenant->id,
             'step' => $tenant->onboarding_current_step,
@@ -140,65 +181,93 @@ class ApisOnboardingController extends Controller
      */
     public function finalizeOnboarding(FinalizeOnboardingRequest $request): JsonResponse
     {
-        // Na finalização também usamos somente dados já validados pelo Request.
+        /**
+         * A finalização também parte somente do contrato validado pelo Request.
+         */
         $data = $request->validated();
 
-        // A finalização sempre resolve tenant por identidade.
+        /**
+         * A finalização resolve o rascunho pela identidade informada.
+         */
         $tenant = $this->findTenantByIdentity($data);
 
         if (!$tenant) {
-            // Sem tenant resolvido não há como seguir com provisionamento.
+            /**
+             * Sem rascunho resolvido não há registro central para receber
+             * domínio, banco, plano e checkpoints de instalação.
+             */
             return response()->json([
                 'message' => 'Não foi possível localizar o tenant para finalização.',
             ], 404);
         }
 
         if (!empty($tenant->onboarding_completed_at)) {
-            // Impede provisionamento duplicado para o mesmo cadastro finalizado.
+            /**
+             * Conta já finalizada não pode disparar provisionamento novamente.
+             */
             return response()->json([
                 'message' => 'Cadastro já finalizado para este tenant.',
             ], 409);
         }
 
         /**
-         * Consolida dados da última etapa antes de qualquer provisionamento.
+         * Consolida dados da última etapa antes do provisionamento.
+         * O snapshot precisa ficar persistido antes de gerar domínio/banco.
          */
         $this->updateTenantFinalStepData($tenant, $data);
 
         /**
          * Não permite finalizar se outro tenant já concluído usar a mesma identidade.
+         * Rascunhos podem continuar, mas contas ativas não podem duplicar documento.
          */
         $this->assertNoCompletedConflicts($tenant);
 
         if (array_key_exists('main_goals', $data)) {
             /**
-             * Se vier goals no payload final, substitui o conjunto atual.
+             * Se vier goals no payload final, substitui o conjunto atual
+             * para refletir exatamente a última seleção do cliente.
              */
             $this->replaceTenantMainGoals($tenant, $data['main_goals'] ?? []);
         }
 
         /**
-         * Calcula domínio, token e dados técnicos necessários para instalação.
+         * Garante dados técnicos sem sobrescrever tentativas já iniciadas.
+         * Essa decisão torna o retry idempotente: domínio, banco, usuário,
+         * senha e checkpoint já salvos continuam sendo a fonte de verdade.
          */
-        $provisioningData = $this->buildProvisioningData($tenant, $data, $request);
-
-        /**
-         * Persiste os dados técnicos antes de chamar o fluxo de provisionamento.
-         */
-        $this->applyProvisioningData($tenant, $provisioningData);
+        $this->ensureProvisioningData($tenant, $data, $request);
 
         /**
          * Garante plano base antes da execução do provisionamento principal.
+         * O tenant remoto precisa receber módulos e limites na etapa modules.
          */
         $this->tenantInitialTrialPlanService->ensureForTenant($tenant);
 
         /**
          * Dispara todas as etapas pendentes e guarda retorno operacional para resposta da API.
          */
-        $provisioningResult = $this->runProvisioningUntilCompleted($tenant);
+        try {
+            $provisioningResult = $this->runProvisioningUntilCompleted($tenant);
+        } catch (Throwable $exception) {
+            /**
+             * Recarrega o checkpoint real para o consumidor saber de qual
+             * etapa deve tentar novamente, sem receber tela HTML de erro.
+             */
+            $tenant->unsetRelation('provisioning');
+            $tenant->loadMissing('provisioning');
+
+            return response()->json([
+                'message' => 'Falha ao finalizar provisionamento do tenant.',
+                'error' => $exception->getMessage(),
+                'provisioning' => [
+                    'step' => $tenant->provisioning?->install,
+                ],
+            ], 422);
+        }
 
         /**
          * Marca onboarding como concluído somente após processar provisionamento.
+         * Falha parcial mantém o cadastro retomável no checkpoint salvo.
          */
         $tenant->onboarding_completed_at = now();
         $tenant->onboarding_current_step = 'address';
@@ -218,19 +287,29 @@ class ApisOnboardingController extends Controller
     private function findTenantByIdentity(array $data): ?Tenant
     {
 
-        // Priorizamos tenants concluídos para não permitir bypass de bloqueio.
+        /**
+         * Priorizamos tenants concluídos para não permitir bypass de bloqueio.
+         */
         $query = Tenant::orderByDesc('onboarding_completed_at')->orderByDesc('id');
 
-        // Obtém o tipo de documento
+        /**
+         * O tipo de documento define qual coluna representa a identidade.
+         */
         $documentType = (string) ($data['document_type'] ?? '');
 
-        // Obtém o documento que deseja ser validado
+        /**
+         * CPF e CNPJ compartilham a mesma função, mas não a mesma coluna.
+         */
         $documentValue = $documentType === 'cpf' ? (string) ($data['cpf'] ?? '') : (string) ($data['cnpj'] ?? '');
 
-        // Obtém a coluna que será buscada
+        /**
+         * A coluna segue diretamente o tipo validado no request.
+         */
         $column = $documentType === 'cpf' ? 'cpf' : 'cnpj';
 
-        // Retorna resultados
+        /**
+         * Retorna o registro mais relevante para continuidade ou bloqueio.
+         */
         return $query->where($column, $documentValue)->first();
 
     }
@@ -241,7 +320,10 @@ class ApisOnboardingController extends Controller
      */
     private function extractOnboardingUpdatableData(array $data): array
     {
-        // Whitelist explícita para proteger contra mass assignment acidental.
+        /**
+         * Whitelist explícita protege contra mass assignment acidental
+         * e impede payload externo de alterar campos operacionais.
+         */
         $allowedFields = [
             'name',
             'email',
@@ -263,7 +345,9 @@ class ApisOnboardingController extends Controller
             'document_type',
         ];
 
-        // Remove qualquer chave extra que não pertença ao contrato do onboarding.
+        /**
+         * Remove qualquer chave extra que não pertença ao contrato do onboarding.
+         */
         return array_intersect_key($data, array_flip($allowedFields));
     }
 
@@ -273,22 +357,32 @@ class ApisOnboardingController extends Controller
      */
     private function buildDraftTenantDefaults(array $data): array
     {
-        // Nome padrão evita falha quando o payload vier sem identificação textual.
+        /**
+         * Nome padrão evita falha quando o payload vier sem identificação textual.
+         */
         $name = (string) ($data['name'] ?? 'Cadastro em andamento');
 
-        // Company usa name como fallback para manter regra de domínio consistente.
+        /**
+         * Company usa name como fallback para manter regra de domínio consistente.
+         */
         $company = (string) ($data['company'] ?? $name ?: 'Cadastro em andamento');
 
-        // Slug serve de base para domínio temporário de rascunho.
+        /**
+         * Slug serve de base para domínio temporário de rascunho.
+         */
         $draftSlug = Str::slug($company ?: $name);
 
         if ($draftSlug === '') {
-            // Fallback quando nome/empresa vier vazio ou com caracteres inválidos.
+            /**
+             * Fallback cobre payload vazio ou inválido para slug.
+             */
             $draftSlug = 'tenant-' . Str::lower(Str::random(8));
         }
 
         return [
-            // Dados mínimos para persistir tenant em estado de onboarding.
+            /**
+             * Dados mínimos para persistir tenant em estado de onboarding.
+             */
             'name' => $name,
             'company' => $company,
             'domain' => "draft-{$draftSlug}-" . time() . '.micore.com.br',
@@ -304,14 +398,20 @@ class ApisOnboardingController extends Controller
      */
     private function assertNoCompletedConflicts(Tenant $tenant): void
     {
-        // Só conflita contra cadastros já concluídos, não contra rascunhos.
+        /**
+         * Só conflita contra cadastros já concluídos, não contra rascunhos.
+         */
         $conflictQuery = Tenant::whereNotNull('onboarding_completed_at')
             ->where('id', '!=', $tenant->id);
 
-        // A identidade pode conflitar por email, CNPJ ou CPF.
+        /**
+         * A identidade pode conflitar por email, CNPJ ou CPF.
+         */
         $conflictQuery->where(function ($query) use ($tenant) {
             if (!empty($tenant->email)) {
-                // Comparação de email em lowercase para evitar falso-negativo.
+                /**
+                 * Comparação de email em lowercase evita falso-negativo.
+                 */
                 $query->orWhere('email', mb_strtolower((string) $tenant->email));
             }
             if (!empty($tenant->cnpj)) {
@@ -323,7 +423,9 @@ class ApisOnboardingController extends Controller
         });
 
         if ($conflictQuery->exists()) {
-            // Retorno 409 explicita conflito de negócio para o consumidor da API.
+            /**
+             * Retorno 409 explicita conflito de negócio para o consumidor da API.
+             */
             throw new HttpResponseException(response()->json([
                 'message' => 'Já existe uma conta finalizada com esses dados.',
             ], 409));
@@ -336,18 +438,26 @@ class ApisOnboardingController extends Controller
      */
     private function updateTenantFinalStepData(Tenant $tenant, array $data): void
     {
-        // Aproveita o mesmo filtro de campos usado no salvamento incremental.
+        /**
+         * Aproveita o mesmo filtro de campos usado no salvamento incremental.
+         */
         $updatableData = $this->extractOnboardingUpdatableData($data);
 
-        // A etapa final sempre precisa ser address para refletir fluxo concluído.
+        /**
+         * A etapa final sempre precisa ser address para refletir fluxo concluído.
+         */
         $updatableData['onboarding_current_step'] = 'address';
 
         if (empty($tenant->onboarding_started_at)) {
-            // Segurança para cadastros antigos sem timestamp inicial.
+            /**
+             * Segurança para cadastros antigos sem timestamp inicial.
+             */
             $updatableData['onboarding_started_at'] = now();
         }
 
-        // Persiste snapshot final de dados antes do provisionamento técnico.
+        /**
+         * Persiste snapshot final de dados antes do provisionamento técnico.
+         */
         $tenant->update($updatableData);
     }
 
@@ -357,15 +467,21 @@ class ApisOnboardingController extends Controller
      */
     private function replaceTenantMainGoals(Tenant $tenant, array $mainGoals): void
     {
-        // O conjunto é substituído por completo para evitar objetivos obsoletos.
+        /**
+         * O conjunto é substituído por completo para evitar objetivos obsoletos.
+         */
         $tenant->mainGoals()->delete();
 
         if (empty($mainGoals)) {
-            // Sem objetivos selecionados, mantém relacionamento vazio.
+            /**
+             * Sem objetivos selecionados, mantém relacionamento vazio.
+             */
             return;
         }
 
-        // Cria objetivos válidos como registros relacionais independentes.
+        /**
+         * Cria objetivos válidos como registros relacionais independentes.
+         */
         $tenant->mainGoals()->createMany(array_map(function ($goal) {
             return ['goal' => $goal];
         }, $mainGoals));
@@ -420,11 +536,26 @@ class ApisOnboardingController extends Controller
     }
 
     /**
-     * Persiste domínio/token e dados de provisionamento do tenant.
-     * Cria runtime status quando ainda não existir registro técnico.
+     * Cria domínio/provisioning somente quando a finalização ainda não começou.
+     * Em retentativa, preserva banco, usuário, senha e checkpoint já salvos.
      */
-    private function applyProvisioningData(Tenant $tenant, array $provisioningData): void
+    private function ensureProvisioningData(Tenant $tenant, array $data, Request $request): void
     {
+        $tenant->loadMissing('domains', 'provisioning', 'runtimeStatus');
+
+        if ($tenant->provisioning && $tenant->domains->isNotEmpty()) {
+            /**
+             * Retentativa deve continuar do checkpoint existente.
+             * Recalcular aqui poderia criar domínio/banco com sufixo novo.
+             */
+            return;
+        }
+
+        /**
+         * Só chega aqui quando ainda não existe infraestrutura central mínima.
+         */
+        $provisioningData = $this->buildProvisioningData($tenant, $data, $request);
+
         if (empty($tenant->token)) {
             /**
              * Mantém token existente quando já houver integração ativa.
@@ -434,24 +565,21 @@ class ApisOnboardingController extends Controller
 
         $tenant->save();
 
-        TenantDomain::updateOrCreate(
-            [
+        if ($tenant->domains->isEmpty()) {
+            /**
+             * O domínio é salvo uma única vez para virar referência estável
+             * das chamadas cPanel e da sincronização remota.
+             */
+            TenantDomain::create([
                 'tenant_id' => $tenant->id,
                 'auto_generate' => true,
-            ],
-            [
                 'domain' => $provisioningData['domain'],
                 'description' => 'Domínio cadastrado ao finalizar onboarding pela API',
                 'status' => true,
-            ]
-        );
+            ]);
+        }
 
-        if ($tenant->provisioning) {
-            /**
-             * Em retentativa de finalização, atualiza dados técnicos existentes.
-             */
-            $tenant->provisioning()->update($provisioningData['provisioning']);
-        } else {
+        if (!$tenant->provisioning) {
             /**
              * Em primeira finalização, cria registro técnico de provisionamento.
              */
@@ -465,6 +593,9 @@ class ApisOnboardingController extends Controller
             $tenant->runtimeStatus()->create();
         }
 
+        /**
+         * Limpa relações carregadas para a próxima etapa ler o estado persistido.
+         */
         $tenant->unsetRelation('domains');
         $tenant->unsetRelation('provisioning');
         $tenant->unsetRelation('runtimeStatus');

@@ -55,16 +55,17 @@ class TenantConfigurationSyncService
         $plan = $tenant->plan;
         $lastSubscription = $tenant->subscriptions()->latest('id')->first();
         $lastCycle = $lastSubscription?->cycles()->latest('id')->first();
+        $trialDays = $plan?->trial_days ?? TenantInitialTrialPlanService::DEFAULT_TRIAL_DAYS;
 
         /**
          * Datas efetivas da configuração.
-         * Prioridade: parâmetro recebido > último ciclo > fallback padrão.
+         * Prioridade: parâmetro recebido > último ciclo > período definido no plano inicial.
          */
         $effectiveStartDate = $startDate
             ?: ($lastCycle?->start_date ? Carbon::parse($lastCycle->start_date)->format('Y-m-d') : now()->toDateString());
 
         $effectiveEndDate = $endDate
-            ?: ($lastCycle?->end_date ? Carbon::parse($lastCycle->end_date)->format('Y-m-d') : now()->addDays(30)->toDateString());
+            ?: ($lastCycle?->end_date ? Carbon::parse($lastCycle->end_date)->format('Y-m-d') : now()->addDays($trialDays)->toDateString());
 
         /**
          * Converte os itens do plano em catálogo consolidado de módulos

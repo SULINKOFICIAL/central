@@ -25,6 +25,7 @@ class TenantPlan extends Model
         'value',
         'users_limit',
         'size_storage',
+        'trial_days',
         'progress',
         'status',
         'tenant_sync_status',
