@@ -131,6 +131,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/',                                      [TenantController::class, 'index'])->name('index');
             Route::get('/processar',                             [TenantProcessingController::class, 'process'])->name('process');
             Route::get('/adicionar',                             [TenantController::class, 'create'])->name('create');
+            Route::get('/consultar-dominio',                     [TenantController::class, 'domainAvailability'])->name('domain.availability');
             Route::post('/adicionar',                            [TenantController::class, 'store'])->name('store');
             Route::get('/visualizar/{id}',                       [TenantController::class, 'show'])->name('show');
             Route::get('/visualizar/dados-api/{id}',             [TenantController::class, 'apiData'])->name('api.data');

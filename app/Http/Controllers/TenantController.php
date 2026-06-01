@@ -51,6 +51,69 @@ class TenantController extends Controller
 
     }
 
+    public function domainAvailability(Request $request)
+    {
+        $validated = $request->validate([
+            'domain' => ['required', 'string', 'max:255'],
+        ]);
+
+        $domain = $this->normalizeTenantDomain($validated['domain']);
+
+        if (empty($domain)) {
+            return response()->json([
+                'available' => false,
+                'domain' => null,
+                'full_domain' => null,
+                'suggestions' => [],
+            ]);
+        }
+
+        $fullDomain = $domain . '.micore.com.br';
+        $available = !TenantDomain::where('domain', $fullDomain)->exists();
+
+        return response()->json([
+            'available' => $available,
+            'domain' => $domain,
+            'full_domain' => $fullDomain,
+            'suggestions' => $available ? [] : $this->domainSuggestions($domain),
+        ]);
+    }
+
+    private function normalizeTenantDomain(string $domain): string
+    {
+        $domain = preg_replace('/^www\./', '', strtolower($domain));
+        $domain = str_replace('.micore.com.br', '', $domain);
+        $domain = cleanString($domain);
+        $domain = str_replace(' ', '-', $domain);
+        $domain = preg_replace('/[^a-z0-9-]/', '', $domain);
+        $domain = preg_replace('/-+/', '-', $domain);
+        $domain = preg_replace('/^-|-$/', '', $domain);
+
+        return $domain;
+    }
+
+    private function domainSuggestions(string $domain): array
+    {
+        $suggestions = [];
+        $counter = 1;
+
+        while (count($suggestions) < 3 && $counter <= 20) {
+            $suggestion = $domain . '-' . $counter;
+            $fullSuggestion = $suggestion . '.micore.com.br';
+
+            if (!TenantDomain::where('domain', $fullSuggestion)->exists()) {
+                $suggestions[] = [
+                    'domain' => $suggestion,
+                    'full_domain' => $fullSuggestion,
+                ];
+            }
+
+            $counter++;
+        }
+
+        return $suggestions;
+    }
+
     /**
      * Store a newly created resource in storage.
      *

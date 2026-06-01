@@ -24,9 +24,10 @@
                     <div class="col-12 mb-4">
                         <label class="form-label fs-6 fw-bold text-gray-700 mb-2 required">Domínio</label>
                         <div class="input-group">
-                            <input type="text" class="form-control form-control-solid" name="domain" placeholder="dominio" value="{{ old('domain') }}" style="border-right: solid 1px #dbdfe9" required/>
+                            <input type="text" class="form-control form-control-solid" name="domain" id="tenant_domain" placeholder="dominio" value="{{ old('domain') }}" style="border-right: solid 1px #dbdfe9" required/>
                             <span class="input-group-text">.micore.com.br</span>
                         </div>
+                        <div id="tenant_domain_feedback" class="mt-2 fs-7"></div>
                     </div>
                     <div class="col-12 col-md-4 mb-4">
                         <label class="form-label fs-6 fw-bold text-gray-700 mb-2 required">Tipo</label>
@@ -150,6 +151,8 @@
     document.addEventListener('DOMContentLoaded', function () {
         const documentType = document.getElementById('tenant_document_type');
         const documentNumber = document.getElementById('tenant_document_number');
+        const tenantDomain = document.getElementById('tenant_domain');
+        const tenantDomainFeedback = document.getElementById('tenant_domain_feedback');
         const zipCode = document.querySelector('[name="company_zip_code"]');
         const cityState = document.querySelector('[name="company_city_state"]');
         const neighborhood = document.querySelector('[name="company_neighborhood"]');
@@ -208,6 +211,91 @@
 
             zipCode.addEventListener('blur', fillAddressFromZipCode);
             zipCode.addEventListener('change', fillAddressFromZipCode);
+        }
+
+        function cleanDomain(value) {
+            return value
+                .toLowerCase()
+                .replace(/^www\./, '')
+                .replace('.micore.com.br', '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9- ]/g, '')
+                .replace(/\s+/g, '-')
+                .replace(/-+/g, '-')
+                .replace(/^-|-$/g, '');
+        }
+
+        function setDomainFeedback(html, className) {
+            if (!tenantDomainFeedback) {
+                return;
+            }
+
+            tenantDomainFeedback.className = 'mt-2 fs-7 ' + className;
+            tenantDomainFeedback.innerHTML = html;
+        }
+
+        function checkDomainAvailability() {
+            if (!tenantDomain || !tenantDomainFeedback) {
+                return;
+            }
+
+            const domain = cleanDomain(tenantDomain.value);
+            tenantDomain.value = domain;
+
+            if (domain.length < 3) {
+                setDomainFeedback('', '');
+                return;
+            }
+
+            const url = '{{ route('tenants.domain.availability', [], false) }}?domain=' + encodeURIComponent(domain);
+
+            fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                },
+            })
+                .then(function (response) {
+                    return response.json();
+                })
+                .then(function (payload) {
+                    if (payload.available) {
+                        setDomainFeedback('Domínio disponível: <strong>' + payload.full_domain + '</strong>', 'text-success');
+                        return;
+                    }
+
+                    if (!payload.suggestions.length) {
+                        setDomainFeedback('Domínio indisponível. Nenhuma sugestão automática foi encontrada.', 'text-danger');
+                        return;
+                    }
+
+                    const suggestionButtons = payload.suggestions.map(function (suggestion) {
+                        return '<button type="button" class="btn btn-sm btn-light-primary me-2 mt-2 tenant-domain-suggestion" data-domain="' + suggestion.domain + '">' + suggestion.full_domain + '</button>';
+                    }).join('');
+
+                    setDomainFeedback('Domínio já cadastrado. Sugestões disponíveis:<div>' + suggestionButtons + '</div>', 'text-danger');
+                })
+                .catch(function () {
+                    setDomainFeedback('Não foi possível consultar este domínio agora.', 'text-warning');
+                });
+        }
+
+        let domainAvailabilityTimer = null;
+
+        if (tenantDomain && tenantDomainFeedback) {
+            tenantDomain.addEventListener('input', function () {
+                window.clearTimeout(domainAvailabilityTimer);
+                domainAvailabilityTimer = window.setTimeout(checkDomainAvailability, 450);
+            });
+
+            tenantDomainFeedback.addEventListener('click', function (event) {
+                if (!event.target.classList.contains('tenant-domain-suggestion')) {
+                    return;
+                }
+
+                tenantDomain.value = event.target.dataset.domain;
+                checkDomainAvailability();
+            });
         }
 
         configureDocumentField();
