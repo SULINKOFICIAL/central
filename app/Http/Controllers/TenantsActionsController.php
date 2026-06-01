@@ -802,7 +802,7 @@ class TenantsActionsController extends Controller
      * Reseta plano, assinaturas, pedidos e transações do tenant no core_business.
      * Disponível apenas em ambiente de testes.
      */
-    public function removePackagesManual(Request $request, $id)
+    public function resetPlanManual(Request $request, $id)
     {
         if (!app()->environment(['local', 'testing'])) {
             abort(403, 'Ação permitida apenas em ambiente de testes.');

@@ -54,7 +54,7 @@
                         Ações destrutivas para reset operacional em ambiente local ou de testes.
                     </div>
                 </div>
-                <a href="{{ route('systems.remove.packages', $client->id) }}"
+                <a href="{{ route('systems.reset.plan', $client->id) }}"
                    class="btn btn-sm btn-light-danger"
                    onclick="return confirm('Tem certeza que deseja resetar plano, assinaturas e pedidos desta instalação?');">
                     <i class="fa-solid fa-box-open me-1"></i>Resetar Plano e Histórico

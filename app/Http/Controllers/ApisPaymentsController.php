@@ -50,7 +50,9 @@ class ApisPaymentsController extends Controller
             return response()->json($response, 200);
         }
 
-        // Obtem o pacote do cliente
+        /**
+         * Obtém o plano em andamento do tenant.
+         */
         $plan = $service->getPlanInProgress($data['tenant']);
 
         // Busca o pedido em andamento

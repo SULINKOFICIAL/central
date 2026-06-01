@@ -47,7 +47,7 @@
 
             @if (!$actualPlan['name'])
                 <div class="alert alert-danger mt-5 mb-0">
-                    <i class="fa-solid fa-triangle-exclamation me-2"></i>Nenhum pacote atribuído.
+                    <i class="fa-solid fa-triangle-exclamation me-2"></i>Nenhum plano ativo.
                 </div>
             @endif
 

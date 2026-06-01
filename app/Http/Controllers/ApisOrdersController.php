@@ -38,7 +38,9 @@ class ApisOrdersController extends Controller
         // Obtem cliente
         $tenant = $data['tenant'];
 
-        // Obtem o pacote do cliente
+        /**
+         * Obtém o plano em andamento do tenant.
+         */
         $plan = $this->orderService->getPlanInProgress($tenant);
 
         // Busca o pedido em andamento
@@ -343,7 +345,9 @@ class ApisOrdersController extends Controller
         // Extrai cliente
         $tenant = $data['tenant'];
 
-        // Obtem o pacote do cliente
+        /**
+         * Obtém o plano em andamento do tenant.
+         */
         $plan = $this->orderService->getPlanInProgress($tenant);
 
         // Busca o pedido em andamento

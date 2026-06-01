@@ -20,13 +20,6 @@ class Package extends Model
         'updated_by',
     ];
 
-    public function clients()
-    {
-        return $this->belongsToMany(Tenant::class, 'tenants_plans')
-                    ->withPivot('start_date', 'end_date', 'status')
-                    ->withTimestamps();
-    }
-
     public function modules(): BelongsToMany
     {
         return $this->belongsToMany(Module::class, 'packages_modules', 'package_id', 'module_id')
@@ -37,5 +30,4 @@ class Package extends Model
     {
         return $this->hasMany(PackageBenefit::class)->orderBy('position');
     }
-    
 }

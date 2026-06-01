@@ -214,9 +214,6 @@ Route::middleware(['auth'])->group(function () {
             Route::put('/editar/{id}',      [PackageController::class, 'update'])->name('update');
             Route::post('/ordem/{id}',      [PackageController::class, 'updateOrder'])->name('order.update');
             Route::get('/desabilitar/{id}', [PackageController::class, 'destroy'])->name('destroy');
-            Route::post('/atribuir/{id}',   [PackageController::class, 'assign'])->name('assign');
-            Route::post('/atualizar/{id}',  [PackageController::class, 'upgrade'])->name('upgrade');
-            Route::post('/novo/{id}',       [PackageController::class, 'new'])->name('new');
         });
     });
 
@@ -441,7 +438,7 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('sistemas')->group(function () {
         Route::name('systems.')->group(function () {
             Route::get('/acessar-recursos',                  [TenantsActionsController::class, 'getResources'])->name('get.resources');
-            Route::get('/remover-pacotes/{id}',              [TenantsActionsController::class, 'removePackagesManual'])->name('remove.packages');
+            Route::get('/resetar-plano/{id}',                [TenantsActionsController::class, 'resetPlanManual'])->name('reset.plan');
             Route::get('/atualizar-banco/{id}',              [TenantsActionsController::class, 'updateDatabaseManual'])->name('update.database');
             Route::get('/atualizar-git/{id}',                [TenantsActionsController::class, 'updateGitManual'])->name('update.git');
             Route::get('/reiniciar-filas/{id}',              [TenantsActionsController::class, 'updateSupervisorManual'])->name('update.supervisor');

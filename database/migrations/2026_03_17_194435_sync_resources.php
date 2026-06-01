@@ -135,7 +135,7 @@ return new class extends Migration
         DB::statement('SET FOREIGN_KEY_CHECKS=0;');
 
         DB::table('orders')->truncate();
-        DB::table('order_transactions')->truncate();
+        DB::table('orders_transactions')->truncate();
         DB::table('subscriptions_cycles')->truncate();
         DB::table('subscriptions')->truncate();
         DB::table('clients_packages')->truncate();
@@ -212,7 +212,7 @@ return new class extends Migration
                 'updated_at' => now(),
             ]);
 
-            DB::table('order_transactions')->insert([
+            DB::table('orders_transactions')->insert([
                 'order_id' => $orderId,
                 'subscription_id' => $subscriptionId,
                 'pagarme_transaction_id' => '1',

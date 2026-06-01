@@ -4,16 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Tenant;
 use App\Models\TenantDomain;
-use App\Models\TenantPlan;
-use App\Models\TenantPlanItem;
 use App\Models\TenantProvisioning;
 use App\Models\Module;
-use App\Models\Order;
-use App\Models\OrderTransaction;
 use App\Models\Package;
-use App\Models\Subscription;
-use App\Models\SubscriptionCycle;
 use App\Services\GuzzleService;
+use App\Services\TenantInitialTrialPlanService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use GuzzleHttp\Client as Guzzle;
@@ -23,7 +18,10 @@ class TenantController extends Controller
 {
     private $repository;
 
-    public function __construct(Tenant $content)
+    public function __construct(
+        Tenant $content,
+        private readonly TenantInitialTrialPlanService $tenantInitialTrialPlanService
+    )
     {
         $this->repository = $content;
     }
@@ -104,105 +102,21 @@ class TenantController extends Controller
 
         unset($data['table'], $data['table_user'], $data['table_password'], $data['first_user'], $data['user']);
 
-        // Insere no banco de dados
+        /**
+         * Insere o tenant e seus dados técnicos iniciais.
+         */
         $created = $this->repository->create($data);
         $created->provisioning()->create($provisioningData);
         $created->runtimeStatus()->create();
 
-        // Cria o pacote do cliente
-        $package = TenantPlan::create([
-            'tenant_id' => $created->id,
-            'name' => 'DEMO 30 DIAS',
-            'price' => 0,
-            'status' => 1,
-            'created_at' => now(),
-        ]);
+        /**
+         * Novas contas começam com teste operacional sem histórico financeiro.
+         */
+        $this->tenantInitialTrialPlanService->ensureForTenant($created);
 
-        $modules = Module::where('module_category_id', 1)
-            ->where('status', true)
-            ->get();
-
-        $packageItems = $modules->map(function($module) use ($package) {
-            $basePrice = (float) $module->value;
-            return [
-                'plan_id' => $package->id,
-                'package_id' => null,
-                'item_id' => $module->id,
-                'item_type' => 'module',
-                'module_name' => $module->name,
-                'base_price' => $basePrice,
-                'applied_price' => $basePrice,
-                'discount_amount' => 0,
-                'discount_percent' => 0,
-                'pricing_source' => 'tenant_bootstrap',
-                'billing_type' => $module->pricing_type,
-                'payload' => $module->toJson(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
-        })->toArray();
-
-        // Cria os itens do pacote
-        TenantPlanItem::insert($packageItems);
-
-        // Cria uma assinatura fictícia
-        $subscription = Subscription::create([
-            'tenant_id' => $created->id,
-            'plan_id' => $package->id,
-            'provider' => 'micore',
-            'provider_subscription_id' => 'manual-admin-' . $created->id,
-            'provider_card_id' => 'manual-card-' . $created->id,
-            'interval' => 'year',
-            'payment_method' => 'liberado',
-            'currency' => 'BRL',
-            'installments' => 1,
-            'status' => 'paid',
-            'created_at' => now(),
-        ]);
-
-        // Cria um pedido fictício
-        $order = Order::create([
-            'tenant_id' => $created->id,
-            'plan_id' => $package->id,
-            'subscription_id' => $subscription->id,
-            'total_amount' => 0,
-            'status' => 'Liberado',
-            'current_step' => 'Pagamento',
-            'created_at' => now(),
-        ]);
-
-        $subscription->update([
-            'order_id' => $order->id,
-        ]);
-
-        // Cria um ciclo de assinatura fictício
-        SubscriptionCycle::create([
-            'subscription_id' => $subscription->id,
-            'provider' => 'micore',
-            'provider_cycle_id' => 'manual-cycle-' . $subscription->id,
-            'start_date' => now(),
-            'end_date' => now()->addDays(30),
-            'status' => 'billed',
-            'cycle' => 1,
-            'billing_at' => now(),
-            'next_billing_at' => now()->addDays(30),
-            'created_at' => now(),
-        ]);
-
-        // Cria uma transação fictícia
-        OrderTransaction::create([
-            'order_id' => $order->id,
-            'subscription_id' => $subscription->id,
-            'provider' => 'micore',
-            'provider_transaction_id' => 'manual-tx-' . $order->id,
-            'amount' => 0,
-            'status' => 'paid',
-            'provider_method' => 'liberado',
-            'currency' => 'BRL',
-            'created_at' => now(),
-        ]);
-
-        // Registra o domínio do cliente
+        /**
+         * Registra o domínio do cliente.
+         */
         TenantDomain::create([
             'tenant_id'     => $created->id,
             'auto_generate' => true,
@@ -211,7 +125,9 @@ class TenantController extends Controller
             'status'        => true,
         ]);
 
-        // Retorna a página
+        /**
+         * Retorna a página.
+         */
         return redirect()
                 ->route('tenants.install.index', $created->id)
                 ->with('message', 'Tenante <b>'. $created->name . '</b> adicionado com sucesso.');

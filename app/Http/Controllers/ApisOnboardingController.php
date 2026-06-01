@@ -6,8 +6,10 @@ use App\Http\Requests\Api\CheckOnboardingIdentityRequest;
 use App\Http\Requests\Api\FinalizeOnboardingRequest;
 use App\Http\Requests\Api\SaveOnboardingStepRequest;
 use App\Models\Tenant;
+use App\Models\TenantDomain;
 use App\Models\TenantProvisioning;
 use App\Services\CpanelProvisioningService;
+use App\Services\TenantInitialTrialPlanService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,7 +19,8 @@ class ApisOnboardingController extends Controller
 {
     public function __construct(
         private readonly Tenant $tenantRepository,
-        private readonly CpanelProvisioningService $cpanelProvisioningService
+        private readonly CpanelProvisioningService $cpanelProvisioningService,
+        private readonly TenantInitialTrialPlanService $tenantInitialTrialPlanService
     ) {}
 
     /**
@@ -157,31 +160,46 @@ class ApisOnboardingController extends Controller
             ], 409);
         }
 
-        // Consolidamos dados da última etapa antes de qualquer provisionamento.
+        /**
+         * Consolida dados da última etapa antes de qualquer provisionamento.
+         */
         $this->updateTenantFinalStepData($tenant, $data);
 
-        // Não permite finalizar se outro tenant já concluído usar a mesma identidade.
+        /**
+         * Não permite finalizar se outro tenant já concluído usar a mesma identidade.
+         */
         $this->assertNoCompletedConflicts($tenant);
 
         if (array_key_exists('main_goals', $data)) {
-            // Se vier goals no payload final, substituímos o conjunto atual.
+            /**
+             * Se vier goals no payload final, substitui o conjunto atual.
+             */
             $this->replaceTenantMainGoals($tenant, $data['main_goals'] ?? []);
         }
 
-        // Calcula domínio, token e dados técnicos necessários para instalação.
+        /**
+         * Calcula domínio, token e dados técnicos necessários para instalação.
+         */
         $provisioningData = $this->buildProvisioningData($tenant, $data, $request);
 
-        // Persiste os dados técnicos antes de chamar o fluxo de provisionamento.
+        /**
+         * Persiste os dados técnicos antes de chamar o fluxo de provisionamento.
+         */
         $this->applyProvisioningData($tenant, $provisioningData);
 
-        // Garante pacote base antes da execução do provisionamento principal.
-        $assignRequest = new Request(['package_id' => 1]);
-        app(PackageController::class)->assign($assignRequest, $tenant->id);
+        /**
+         * Garante plano base antes da execução do provisionamento principal.
+         */
+        $this->tenantInitialTrialPlanService->ensureForTenant($tenant);
 
-        // Dispara provisionamento e guarda retorno operacional para resposta da API.
-        $provisioningResult = $this->cpanelProvisioningService->runProvisioning($tenant);
+        /**
+         * Dispara todas as etapas pendentes e guarda retorno operacional para resposta da API.
+         */
+        $provisioningResult = $this->runProvisioningUntilCompleted($tenant);
 
-        // Marca onboarding como concluído somente após processar provisionamento.
+        /**
+         * Marca onboarding como concluído somente após processar provisionamento.
+         */
         $tenant->onboarding_completed_at = now();
         $tenant->onboarding_current_step = 'address';
         $tenant->save();
@@ -359,20 +377,29 @@ class ApisOnboardingController extends Controller
      */
     private function buildProvisioningData(Tenant $tenant, array $data, Request $request): array
     {
-        // Company/nome definem slug de subdomínio e identificação técnica.
+        /**
+         * Company/nome definem slug de subdomínio e identificação técnica.
+         */
         $tenantCompany = $tenant->company ?: $tenant->name;
         $rawDomain = verifyIfAllow($tenantCompany ?: ('tenant-' . $tenant->id));
 
-        // Usuário de banco precisa evitar hífen para cumprir padrão técnico.
-        $tableUser = str_replace('-', '_', $rawDomain);
+        /**
+         * Usuário de banco precisa evitar hífen para cumprir padrão técnico.
+         */
+        $domainClean = str_replace('-', '_', $rawDomain);
 
-        // Prefixo mantém convenção de bancos por ambiente no cPanel.
-        $tableName = env('CPANEL_PREFIX') . '_' . $tableUser;
+        /**
+         * Prefixo mantém convenção de bancos por ambiente no cPanel.
+         */
+        $tableUser = env('CPANEL_PREFIX') . '_' . $domainClean;
+        $tableName = env('CPANEL_PREFIX') . '_' . $domainClean;
 
-        // Primeiro usuário usa nome do tenant como fallback seguro.
+        /**
+         * Primeiro usuário usa nome do tenant como fallback seguro.
+         */
         $firstUserName = $tenant->name ?: 'Usuário';
-        $plainPassword = (string) ($data['password'] ?? $request->input('password', ''));
-        // Senha do primeiro usuário pode vir de etapa salva ou do payload final.
+        $passwordInput = $data['password'] ?? $request->input('password', '');
+        $plainPassword = is_string($passwordInput) ? $passwordInput : '';
 
         return [
             'domain' => $rawDomain . '.micore.com.br',
@@ -399,25 +426,72 @@ class ApisOnboardingController extends Controller
     private function applyProvisioningData(Tenant $tenant, array $provisioningData): void
     {
         if (empty($tenant->token)) {
-            // Mantém token existente quando já houver integração ativa.
+            /**
+             * Mantém token existente quando já houver integração ativa.
+             */
             $tenant->token = $provisioningData['token'];
         }
 
-        // Domínio final substitui domínio temporário de rascunho.
-        $tenant->domain = $provisioningData['domain'];
         $tenant->save();
 
+        TenantDomain::updateOrCreate(
+            [
+                'tenant_id' => $tenant->id,
+                'auto_generate' => true,
+            ],
+            [
+                'domain' => $provisioningData['domain'],
+                'description' => 'Domínio cadastrado ao finalizar onboarding pela API',
+                'status' => true,
+            ]
+        );
+
         if ($tenant->provisioning) {
-            // Em retentativa de finalização, atualiza dados técnicos existentes.
+            /**
+             * Em retentativa de finalização, atualiza dados técnicos existentes.
+             */
             $tenant->provisioning()->update($provisioningData['provisioning']);
         } else {
-            // Em primeira finalização, cria registro técnico de provisionamento.
+            /**
+             * Em primeira finalização, cria registro técnico de provisionamento.
+             */
             $tenant->provisioning()->create($provisioningData['provisioning']);
         }
 
         if (!$tenant->runtimeStatus) {
-            // Runtime status é necessário para monitoramento pós-instalação.
+            /**
+             * Runtime status é necessário para monitoramento pós-instalação.
+             */
             $tenant->runtimeStatus()->create();
         }
+
+        $tenant->unsetRelation('domains');
+        $tenant->unsetRelation('provisioning');
+        $tenant->unsetRelation('runtimeStatus');
+    }
+
+    /**
+     * A API final precisa concluir todas as etapas que a tela executa uma por vez.
+     */
+    private function runProvisioningUntilCompleted(Tenant $tenant): array
+    {
+        $steps = [];
+        $lastResult = [];
+
+        foreach (TenantProvisioning::INSTALL_STEPS as $step) {
+            $tenant->unsetRelation('provisioning');
+            $tenant->unsetRelation('domains');
+
+            $lastResult = $this->cpanelProvisioningService->runProvisioning($tenant);
+            $steps[] = $lastResult;
+
+            if (($lastResult['step'] ?? null) === TenantProvisioning::STEP_COMPLETED) {
+                break;
+            }
+        }
+
+        $lastResult['steps'] = $steps;
+
+        return $lastResult;
     }
 }

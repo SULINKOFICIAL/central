@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 return new class extends Migration
 {
@@ -17,11 +18,7 @@ return new class extends Migration
 
     public function up(): void
     {
-        $seedUserId = DB::table('users')->orderBy('id')->value('id');
-
-        if (!$seedUserId) {
-            throw new RuntimeException('Não foi possível semear additional_users: nenhum usuário foi encontrado.');
-        }
+        $seedUserId = $this->seedUserId();
 
         $now = Carbon::now();
 
@@ -45,5 +42,22 @@ return new class extends Migration
     {
         DB::table('additional_users')->delete();
     }
-};
 
+    private function seedUserId()
+    {
+        $seedUserId = DB::table('users')->orderBy('id')->value('id');
+
+        if ($seedUserId) {
+            return $seedUserId;
+        }
+
+        return DB::table('users')->insertGetId([
+            'name' => 'Sistema',
+            'email' => 'sistema@micore.local',
+            'password' => Hash::make('micore-system-user'),
+            'status' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+};
