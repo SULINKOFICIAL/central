@@ -364,6 +364,7 @@ if (! function_exists('header_menu_items')) {
                     'system.settings.subscriptions.sync.edit',
                     'system.settings.provisioning.integrity',
                     'system.settings.provisioning.domain.lookup',
+                    'system.settings.provisioning.orphans',
                     'systems.run.scheduled.now',
                     'systems.run.scheduled.now.tenant',
                     'systems.update.all.systems',
@@ -394,6 +395,12 @@ if (! function_exists('header_menu_items')) {
                         'route' => 'system.settings.provisioning.domain.lookup',
                         'active_routes' => ['system.settings.provisioning.domain.lookup'],
                         'icon' => ['class' => 'fa-solid fa-globe fs-5'],
+                    ],
+                    [
+                        'label' => 'Recursos Órfãos',
+                        'route' => 'system.settings.provisioning.orphans',
+                        'active_routes' => ['system.settings.provisioning.orphans'],
+                        'icon' => ['class' => 'fa-solid fa-trash-can-arrow-up fs-5'],
                     ],
                     [
                         'label' => 'Disparar Tarefas',
