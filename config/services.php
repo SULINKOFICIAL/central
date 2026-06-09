@@ -39,4 +39,8 @@ return [
         'token' => env('CENTRAL_TOKEN'),
     ],
 
+    'integrations_sync' => [
+        'url' => env('INTEGRATIONS_SYNC_URL', 'https://tmhfrghay3.execute-api.us-east-1.amazonaws.com/prod/integrations'),
+    ],
+
 ];
