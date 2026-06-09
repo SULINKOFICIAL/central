@@ -52,6 +52,7 @@ use App\Http\Controllers\NewsCategoryProcessingController;
 use App\Http\Controllers\NewsProcessingController;
 use App\Http\Controllers\OrderProcessingController;
 use App\Http\Controllers\ResourceProcessingController;
+use App\Http\Controllers\SqsErrorController;
 use App\Http\Controllers\SuggestionProcessingController;
 use App\Http\Controllers\TicketProcessingController;
 use App\Http\Controllers\TikTokApiController;
@@ -550,6 +551,8 @@ Route::prefix('webhooks')->withoutMiddleware(['web'])->group(function () {
 
     Route::get('/tiktok',    [TikTokApiController::class, 'return']);
     Route::post('/tiktok',   [TikTokApiController::class, 'return']);
+
+    Route::post('/sqs',      [SqsErrorController::class, 'return']);
     
 });
 
