@@ -15,21 +15,30 @@ class SqsErrorController extends Controller
     public function return(Request $request)
     {
         /**
+         * SNS envia o corpo como JSON mas com Content-Type text/plain,
+         * então $request->input() fica vazio. Decodificamos o corpo cru.
+         */
+        $data = json_decode($request->getContent(), true) ?? [];
+
+        /**
          * Verifica se é uma confirmação de assinatura do SNS
          * O SNS envia esse tipo de requisição quando uma nova assinatura é criada
          */
         if ($request->header('x-amz-sns-message-type') === 'SubscriptionConfirmation') {
 
+            // URL de confirmação enviada pelo SNS
+            $subscribeUrl = $data['SubscribeURL'] ?? null;
+
             /**
-             * Confirma a assinatura fazendo um GET na SubscribeURL enviada pelo SNS
+             * Só confirma se a URL existir e pertencer ao domínio da AWS.
+             * Evita SSRF: a SubscribeURL nunca deve apontar para outro host.
              */
-            Http::get($request->input('SubscribeURL'));
+            if ($subscribeUrl && $this->isAwsUrl($subscribeUrl)) {
+                Http::get($subscribeUrl);
+            }
 
             return response()->json(['status' => 'confirmed'], 200);
         }
-
-        // Obtém dados
-        $data = $request->all();
 
         // Dispara para a função que resolve
         $this->handle($data);
@@ -40,6 +49,31 @@ class SqsErrorController extends Controller
             'message' => 'Webhook recebido e será processado em background.'
         ], 202);
 
+    }
+
+    /**
+     * Valida se a URL usa HTTPS e pertence ao domínio amazonaws.com.
+     * Protege contra SSRF na confirmação de assinatura do SNS.
+     */
+    private function isAwsUrl(string $url): bool
+    {
+        // Quebra a URL em partes
+        $parts = parse_url($url);
+
+        // Sem host ou esquema inválida
+        if (empty($parts['scheme']) || empty($parts['host'])) {
+            return false;
+        }
+
+        // Exige HTTPS
+        if ($parts['scheme'] !== 'https') {
+            return false;
+        }
+
+        // Host deve ser amazonaws.com ou subdomínio dele
+        $host = strtolower($parts['host']);
+
+        return $host === 'amazonaws.com' || str_ends_with($host, '.amazonaws.com');
     }
 
     public function handle(array $data): void
