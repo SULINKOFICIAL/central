@@ -86,8 +86,8 @@ class SqsErrorController extends Controller
          */
         $log = [
             'subject'           => $data['Subject'],
-            'payload'           => json_decode($data['Message'], true),
             'attributes'        => $data['MessageAttributes'],
+            'payload'           => json_decode($data['Message'], true),
         ];
 
         /**
