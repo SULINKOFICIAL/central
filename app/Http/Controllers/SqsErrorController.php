@@ -15,16 +15,16 @@ class SqsErrorController extends Controller
     public function return(Request $request)
     {
         /**
+         * SNS envia o corpo como JSON mas com Content-Type text/plain,
+         * então $request->input() fica vazio. Decodificamos o corpo cru.
+         */
+        $data = json_decode($request->getContent(), true) ?? [];
+
+        /**
          * Verifica se é uma confirmação de assinatura do SNS
          * O SNS envia esse tipo de requisição quando uma nova assinatura é criada
          */
         if ($request->header('x-amz-sns-message-type') === 'SubscriptionConfirmation') {
-
-            /**
-             * SNS envia o corpo como JSON mas com Content-Type text/plain,
-             * então $request->input() fica vazio. Decodificamos o corpo cru.
-             */
-            $data = json_decode($request->getContent(), true) ?? [];
 
             // URL de confirmação enviada pelo SNS
             $subscribeUrl = $data['SubscribeURL'] ?? null;
@@ -39,9 +39,6 @@ class SqsErrorController extends Controller
 
             return response()->json(['status' => 'confirmed'], 200);
         }
-
-        // Obtem dados
-        $data = $request->all();
 
         // Dispara para a função que resolve
         $this->handle($data);
@@ -81,17 +78,25 @@ class SqsErrorController extends Controller
 
     public function handle(array $data): void
     {
+        /**
+         * Extrai e salva os campos relevantes do erro recebido pelo SNS
+         * - Subject: resumo do erro
+         * - Message: payload original do webhook que causou o erro
+         * - MessageAttributes: dados detalhados do erro (platform, errorType, errorMessage, occurredAt)
+         */
+        $log = [
+            'subject'           => $data['Subject'],
+            'message'           => json_decode($data['Message'], true),
+            'messageAttributes' => $data['MessageAttributes'],
+        ];
 
         /**
-         * Salvamos em uma tabela interna no miCore
-         * para debugar e garantir que o webhook foi 
-         * recebido e salvo.
+         * Salva o erro na tabela de logs para debug e rastreamento
          */
         LogsApi::create([
             'api'    => 'SQS',
-            'json'   => json_encode($data),
+            'json'   => json_encode($log),
             'status' => LogApiStatusEnum::FAILED->value,
         ]);
-
     }
 }
